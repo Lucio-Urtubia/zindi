@@ -1,0 +1,15 @@
+# Cloudflare Workers ayarları: uçak verisi aracısı + site kapalıyken bildirim abonelikleri.
+# Kurulum adımları: YAYIN.md. Yayınlamak için: npx wrangler deploy
+name = "zindi"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+# Siteye izin verilen adresler (virgülle ayrılır). Alan adı alınınca başa yazılır.
+ALLOWED_ORIGINS = "http://localhost:8080"
+
+# Bildirim abonelikleri. Kimliği "npx wrangler kv namespace create SUBS" komutunun çıktısından alın.
+[[kv_namespaces]]
+binding = "SUBS"
+id = "BURAYA_KV_KIMLIGI"

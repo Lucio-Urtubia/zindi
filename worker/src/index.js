@@ -1,0 +1,139 @@
+// Zindî — küçük yardımcı sunucu (Cloudflare Workers, ücretsiz plan).
+//
+// 1) Uçak verisi aracısı. adsb.lol ve adsb.fi (gönüllü ADS-B alıcı ağları) tarayıcıdan doğrudan erişime (CORS)
+//    izin vermiyor; bu servis isteği iletir ve sadece haritanın ihtiyaç duyduğu alanları döndürür.
+//      /area?lat=37.5&lon=43.7&dist=250   bir noktanın çevresindeki uçaklar (en fazla 250 deniz mili)
+//      /mil                               dünya genelindeki askeri uçuşlar
+//
+// 2) Bildirim abonelikleri (site kapalıyken de bildirim). Abonelik ve tercihleri KV'de saklanır;
+//    bildirimleri GitHub Actions gönderir (scripts/push.mjs), listeyi buradan gizli anahtarla alır.
+//      POST /push/subscribe     { sub, regions, groups, lang }       aboneliği kaydeder veya günceller
+//      POST /push/unsubscribe   { endpoint }                         aboneliği siler
+//      GET  /push/list          (Authorization: Bearer PUSH_TOKEN)   tüm abonelikler
+//      POST /push/remove        (Authorization: Bearer PUSH_TOKEN)   { ids }  süresi dolmuş abonelikleri siler
+
+const SOURCES = ['https://api.adsb.lol/v2', 'https://opendata.adsb.fi/api/v2'];
+const REGIONS = ['kurdistan', 'imrali', 'tr', 'sy', 'iq', 'ir', 'il'];
+const GROUPS = ['conflict', 'quake', 'disaster'];
+const LANGS = ['tr', 'ku', 'ckb', 'en', 'ar'];
+
+function corsHeaders(req, env) {
+  const allowed = (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const origin = req.headers.get('Origin') || '';
+  return {
+    'Access-Control-Allow-Origin': allowed.includes(origin) ? origin : allowed[0] || '',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    Vary: 'Origin',
+  };
+}
+const json = (body, cors, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+// İlk kaynak yanıt vermezse ikincisi denenir.
+async function upstream(path) {
+  let last;
+  for (const base of SOURCES) {
+    try {
+      const res = await fetch(base + path, { headers: { 'User-Agent': 'zindi' }, cf: { cacheTtl: 15 } });
+      if (res.ok) return await res.json();
+      last = new Error(`${res.status} ${base}`);
+    } catch (e) { last = e; }
+  }
+  throw last;
+}
+
+// Haritaya sadece gereken alanlar gider: veri küçülür, ziyaretçinin interneti yorulmaz.
+const slim = (a) => ({
+  h: a.hex, f: (a.flight || '').trim(), r: a.r || '', t: a.t || '',
+  lat: a.lat, lon: a.lon, alt: a.alt_baro, gs: a.gs, trk: a.track ?? a.true_heading ?? 0,
+  sq: a.squawk || '', mil: (a.dbFlags & 1) ? 1 : 0,
+});
+
+async function aircraft(url, cors) {
+  let path;
+  if (url.pathname === '/mil') {
+    path = '/mil';
+  } else {
+    const lat = Number(url.searchParams.get('lat'));
+    const lon = Number(url.searchParams.get('lon'));
+    const dist = Math.min(250, Math.max(25, Number(url.searchParams.get('dist')) || 250));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      return new Response('lat/lon geçersiz', { status: 400, headers: cors });
+    }
+    // Yuvarlanmış koordinatlar: yakın istekler aynı önbellek kaydını kullanır.
+    path = `/lat/${lat.toFixed(1)}/lon/${lon.toFixed(1)}/dist/${Math.round(dist / 25) * 25}`;
+  }
+  try {
+    const j = await upstream(path);
+    const ac = (j.ac || j.aircraft || []).filter((a) => a.lat != null && a.lon != null).map(slim);
+    return new Response(JSON.stringify({ now: j.now || Date.now(), ac }), {
+      headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=15' },
+    });
+  } catch (e) {
+    return json({ error: String(e.message || e) }, cors, 502);
+  }
+}
+
+// Abonelik anahtarı uç noktanın özetidir; aynı tarayıcı tekrar abone olursa kaydı güncellenir.
+async function subId(endpoint) {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return [...new Uint8Array(hash)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+const pick = (list, allowed) => [...new Set((Array.isArray(list) ? list : []).filter((x) => allowed.includes(x)))];
+
+async function push(req, env, url, cors) {
+  const authorized = env.PUSH_TOKEN && req.headers.get('Authorization') === `Bearer ${env.PUSH_TOKEN}`;
+  if (url.pathname === '/push/list' && req.method === 'GET') {
+    if (!authorized) return json({ error: 'yetki yok' }, cors, 401);
+    // Abonelik ve tercihler anahtarın ek bilgisinde durur: listelemek, tek tek okumaktan çok daha ucuzdur.
+    const subs = [];
+    let cursor;
+    do {
+      const page = await env.SUBS.list({ cursor });
+      for (const k of page.keys) if (k.metadata) subs.push({ id: k.name, ...k.metadata });
+      cursor = page.list_complete ? null : page.cursor;
+    } while (cursor);
+    return json({ subs }, cors);
+  }
+  if (req.method !== 'POST') return json({ error: 'POST bekleniyor' }, cors, 405);
+  let body;
+  try { body = await req.json(); } catch { return json({ error: 'geçersiz istek' }, cors, 400); }
+  if (url.pathname === '/push/remove') {
+    if (!authorized) return json({ error: 'yetki yok' }, cors, 401);
+    await Promise.all((body.ids || []).slice(0, 500).map((id) => env.SUBS.delete(String(id))));
+    return json({ ok: true }, cors);
+  }
+  const endpoint = body.sub?.endpoint || body.endpoint;
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://') || endpoint.length > 600) return json({ error: 'abonelik geçersiz' }, cors, 400);
+  const id = await subId(endpoint);
+  if (url.pathname === '/push/unsubscribe') {
+    await env.SUBS.delete(id);
+    return json({ ok: true }, cors);
+  }
+  if (url.pathname === '/push/subscribe') {
+    const keys = body.sub?.keys || {};
+    if (typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') return json({ error: 'abonelik geçersiz' }, cors, 400);
+    const meta = {
+      sub: { endpoint, keys: { p256dh: keys.p256dh.slice(0, 120), auth: keys.auth.slice(0, 40) } },
+      r: pick(body.regions, REGIONS), g: pick(body.groups, GROUPS), l: LANGS.includes(body.lang) ? body.lang : 'tr',
+    };
+    // Bir yıl hiç yenilenmeyen abonelik kendiliğinden silinir; site her açılışta aboneliği yeniler.
+    await env.SUBS.put(id, '', { metadata: meta, expirationTtl: 365 * 86400 });
+    return json({ ok: true }, cors);
+  }
+  return json({ error: 'bilinmeyen adres' }, cors, 404);
+}
+
+export default {
+  async fetch(req, env) {
+    const cors = corsHeaders(req, env);
+    if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const url = new URL(req.url);
+    if (url.pathname === '/mil' || url.pathname === '/area') return aircraft(url, cors);
+    if (url.pathname.startsWith('/push/')) {
+      if (!env.SUBS) return json({ error: 'bildirim deposu kurulmamış' }, cors, 503);
+      return push(req, env, url, cors);
+    }
+    return new Response('Zindî servisi: /area?lat=&lon=&dist=, /mil, /push/…', { headers: cors });
+  },
+};

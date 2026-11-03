@@ -1,0 +1,16 @@
+{
+  "name": "Zindî · Canlı Olay Haritası",
+  "short_name": "Zindî",
+  "description": "Kürdistan, Türkiye ve Orta Doğu'daki gelişmeleri canlı gösteren ücretsiz harita",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#131a27",
+  "theme_color": "#131a27",
+  "icons": [
+    { "src": "assets/logo/zindi-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/logo/zindi-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/logo/zindi-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/logo/zindi.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

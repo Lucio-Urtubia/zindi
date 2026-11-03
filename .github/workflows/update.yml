@@ -1,0 +1,77 @@
+# Her 15 dakikada bir veriyi çeker, yeni olayları bildirim abonelerine gönderir ve siteyi GitHub Pages'te yayınlar.
+# Herkese açık (public) depolarda GitHub Actions ve Pages ücretsizdir.
+#
+# Toplanan veri ana dala (main) yazılmaz: "data" adlı ayrı dalda her seferinde TEK kayıt olarak tutulur.
+# Böylece 15 dakikada bir eklenen kayıtlar deponun boyutunu yıllar içinde şişirmez; kod geçmişi de temiz kalır.
+name: Verileri güncelle ve yayınla
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      PUSH_API: ${{ secrets.PUSH_API }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Son veriyi data dalından al
+        run: |
+          if git fetch --depth=1 origin data; then git checkout FETCH_HEAD -- data; fi
+          cp data/events.json "$RUNNER_TEMP/prev-events.json" 2>/dev/null || true
+      - run: node scripts/fetch.mjs
+        env:
+          AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
+      # Site kapalıyken bildirim: yeni olayları abonelere gönderir. Gizli değişkenler yoksa bu adım atlanır.
+      - name: Bildirimleri gönder
+        if: ${{ env.PUSH_API != '' }}
+        continue-on-error: true
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          PREV_EVENTS: ${{ runner.temp }}/prev-events.json
+        run: |
+          npm install --no-save --no-audit --no-fund web-push@3.6.7
+          node scripts/push.mjs
+      # Yayına sadece sitenin kendi dosyaları gider (scripts/build-site.mjs).
+      - run: node scripts/build-site.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Veriyi data dalına kaydet (tek kayıt, eskisinin yerine)
+        run: |
+          git config user.name "zindi-bot"
+          git config user.email "zindi-bot@users.noreply.github.com"
+          git checkout --orphan data-snapshot
+          git read-tree --empty
+          git add -f data
+          git commit -q -m "Veri $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -f origin HEAD:data
+
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

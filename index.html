@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="tr" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zindî · Canlı Olay Haritası</title>
+  <meta name="description" content="Kürdistan, Türkiye ve Orta Doğu'daki gelişmeleri canlı gösteren ücretsiz harita">
+  <link rel="icon" href="assets/logo/zindi.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/logo/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#131a27">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="icons.css">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Tema: kullanıcının seçimi, yoksa cihazın açık/koyu ayarı. Sayfa çizilmeden uygulanır.
+    try { document.documentElement.dataset.theme = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch {}
+  </script>
+  <!-- Uzay görünümü (space.js) sadece açıldığında yüklenir; three.js bu adreslerden gelir. -->
+  <script type="importmap">{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  } }</script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="logo"><svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" class="ring-out"/><circle cx="32" cy="32" r="17" class="ring-in"/><circle cx="32" cy="32" r="7" class="dot"/></svg><span id="brandText"></span></div>
+      <span id="today" class="today"></span>
+      <nav id="regions" class="regions"></nav>
+      <button id="finTicker" class="fin-ticker" type="button" hidden></button>
+      <button id="notifyBtn" class="icon-btn notify-btn" type="button" data-page="notify"><i class="ti ti-bell"></i></button>
+      <button id="aboutBtn" class="icon-btn" type="button" data-page="about"><i class="ti ti-info-circle"></i></button>
+      <button id="themeBtn" class="icon-btn theme-btn" type="button"><i class="ti ti-sun-moon"></i></button>
+      <button id="toggleFeed" class="icon-btn mobile-only" aria-label="☰"><i class="ti ti-list"></i></button>
+    </header>
+
+    <div class="mapwrap">
+      <div id="map"></div>
+      <!-- Son 24 saatin özeti: tıklanınca o tür olaylar süzülür. -->
+      <div id="summary" class="summary" hidden></div>
+      <!-- Zaman kaydırıcısı: son 48 saati haritada oynatır. -->
+      <div id="timeline" class="timeline" hidden>
+        <button id="tlPlay" type="button"><i class="ti ti-player-play"></i></button>
+        <input id="tlRange" type="range" min="0" max="1000" value="1000">
+        <span id="tlLabel"></span>
+        <button id="tlLive" type="button" class="tl-live"></button>
+      </div>
+
+      <!-- Sürüklenebilir paneller: başlığından tutup taşınır, katlanır; yerleri tarayıcıda hatırlanır. -->
+      <section id="infoPanel" class="panel info-panel" hidden>
+        <header class="panel-head">
+          <i class="ti ti-info-circle"></i><span id="infoTitle"></span>
+          <button class="panel-btn" data-act="collapse" aria-label="−"><i class="ti ti-minus"></i></button>
+          <button class="panel-btn" data-act="close" aria-label="×"><i class="ti ti-x"></i></button>
+        </header>
+        <div id="infoBody" class="panel-body"></div>
+      </section>
+
+      <section id="streetPanel" class="panel street-panel" hidden>
+        <header class="panel-head">
+          <i class="ti ti-view-360"></i><span id="streetTitle"></span>
+          <button class="panel-btn" data-act="collapse" aria-label="−"><i class="ti ti-minus"></i></button>
+          <button class="panel-btn" data-act="close" aria-label="×"><i class="ti ti-x"></i></button>
+        </header>
+        <div class="panel-body street-body"><div id="streetViewer"></div><div id="streetMsg" class="street-msg"></div></div>
+      </section>
+
+      <section id="layersPanel" class="panel layers-panel" hidden>
+        <header class="panel-head">
+          <i class="ti ti-stack-2"></i><span id="layersTitle"></span>
+          <button class="panel-btn" data-act="collapse" aria-label="−"><i class="ti ti-minus"></i></button>
+          <button class="panel-btn" data-act="close" aria-label="×"><i class="ti ti-x"></i></button>
+        </header>
+        <div class="panel-body">
+          <div id="basemaps" class="basemaps"></div>
+          <div id="chips" class="layer-list"></div>
+          <label class="check"><input id="inView" type="checkbox" checked> <span id="inViewLabel"></span></label>
+        </div>
+      </section>
+    </div>
+
+    <aside id="feed" class="feed">
+      <!-- Telefonda: tutup sürüklenen ya da dokunulan tutamak (kapalı / yarım / tam ekran). -->
+      <div id="feedHandle" class="feed-handle mobile-only" role="button" aria-label="↕"></div>
+      <div class="feed-tabs">
+        <button class="ftab active" data-panel="" id="tabFeed"><i class="ti ti-news"></i><span></span></button>
+        <button class="ftab" data-panel="lang" id="tabLang"><i class="ti ti-language"></i><span></span></button>
+        <button class="ftab" data-panel="time" id="tabTime"><i class="ti ti-clock"></i><span></span></button>
+        <button class="ftab" data-panel="layers" id="tabLayers"><i class="ti ti-stack-2"></i><span></span></button>
+      </div>
+
+      <div id="langPanel" class="feed-panel" hidden>
+        <div id="uiLangs" class="seg"></div>
+        <label class="row"><span id="newsLangLabel"></span><select id="newsLang"></select></label>
+      </div>
+      <div id="timePanel" class="feed-panel" hidden>
+        <div id="ranges" class="seg"></div>
+      </div>
+
+      <div class="feed-search">
+        <i class="ti ti-search"></i>
+        <input id="search" type="search" autocomplete="off">
+      </div>
+      <div id="topics" class="topics"></div>
+      <div id="status" class="status"></div>
+      <ol id="list" class="list"></ol>
+    </aside>
+
+    <!-- Son dakika şeridi: fare üzerine gelince durur, habere tıklanınca kaynağı açılır. -->
+    <footer class="ticker">
+      <span id="tickerLabel" class="ticker-label"></span>
+      <div class="ticker-viewport"><div id="tickerTrack" class="ticker-track"></div></div>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="config.js"></script>
+  <script src="i18n.js"></script>
+  <script src="data/places.js"></script>
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
