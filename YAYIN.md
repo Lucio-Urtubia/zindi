@@ -54,6 +54,7 @@ Depo → Settings:
   `PUSH_TOKEN`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
 - **Secrets and variables → Actions → Variables**: `SITE_URL` = `https://ALANADIN/`
 - **Pages → Source**: GitHub Actions
+- **Secrets and variables → Actions → Variables**: `PAGES_ON` = `true` (bu olmadan yayın adımı atlanır; site yayına çıkmaz)
 - **Pages → Custom domain**: alan adın; Cloudflare DNS'te GitHub'ın gösterdiği kayıtları ekle, "Enforce HTTPS"i aç.
 
 ## 8. Son kontrol

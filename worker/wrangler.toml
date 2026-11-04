@@ -7,9 +7,9 @@ workers_dev = true
 
 [vars]
 # Siteye izin verilen adresler (virgülle ayrılır). Alan adı alınınca başa yazılır.
-ALLOWED_ORIGINS = "http://localhost:8080"
+ALLOWED_ORIGINS = "https://lucio-urtubia.github.io, http://localhost:8080"
 
 # Bildirim abonelikleri. Kimliği "npx wrangler kv namespace create SUBS" komutunun çıktısından alın.
 [[kv_namespaces]]
 binding = "SUBS"
-id = "BURAYA_KV_KIMLIGI"
+id = "ae09baf356ee44bb8913223cc411ab92"

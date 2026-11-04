@@ -68,6 +68,8 @@ jobs:
 
   deploy:
     needs: update
+    # Pages açılınca depo ayarlarında PAGES_ON=true değişkeni eklenir; o zamana kadar yayın adımı atlanır.
+    if: ${{ vars.PAGES_ON == 'true' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
