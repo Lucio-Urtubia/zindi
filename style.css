@@ -32,13 +32,14 @@ button { font: inherit; color: inherit; }
 .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; white-space: nowrap; }
 /* Logo: yeşil ve sarı halka, ortada nabız gibi atan kırmızı nokta. Açık temada sarı koyulaşır. */
 .logo-mark { width: 22px; height: 22px; flex: none; overflow: visible; }
-.logo-mark circle { fill: none; stroke-width: 5; }
-.logo-mark .ring-out { stroke: #2f9e44; }
-.logo-mark .ring-in { stroke: #c79a00; }
-:root[data-theme="dark"] .logo-mark .ring-in { stroke: #e6c229; }
-.logo-mark .dot { fill: #d62828; stroke: none; transform-origin: 32px 32px; animation: logo-dot 2s ease-in-out infinite; }
-@keyframes logo-dot { 50% { transform: scale(1.35); } }
-@media (prefers-reduced-motion: reduce) { .logo-mark .dot { animation: none; } }
+.logo-mark .disc { fill: #d62828; stroke: #2f9e44; stroke-width: 12; }
+.logo-mark .star { fill: #e6c229; transform-origin: 75px 75px; animation: logo-star 3s ease-in-out infinite; }
+@keyframes logo-star { 50% { transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .logo-mark .star { animation: none; } }
+/* Ad: "Gerdûn" sarı, "News" yeşil. */
+.brand-a { color: #c79a00; }
+.brand-b { color: #2f9e44; }
+:root[data-theme="dark"] .brand-a { color: #e6c229; }
 .today { color: var(--muted); white-space: nowrap; font-size: 13px; }
 .regions { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
 .regions::-webkit-scrollbar { display: none; }
@@ -309,6 +310,7 @@ select { font: inherit; border: 1px solid var(--line); border-radius: 6px; paddi
 .sp-mark i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #ffc61a; color: #3a2400; font-size: 12px; }
 .sp-mark:hover, .sp-mark.active { background: #ffc61a; color: #1a1205; }
 .sp-mark.active i { background: #d62828; color: #fff; }
+.sp-earth { display: none; }
 .sp-bar { position: absolute; top: 14px; inset-inline-start: 14px; display: flex; gap: 8px; }
 .sp-bar button, .sp-go, .sp-back { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 10px; padding: 9px 14px;
   background: rgba(22, 28, 42, 0.85); color: #e8ecf4; font: 600 13.5px system-ui, sans-serif; cursor: pointer; }
@@ -363,9 +365,13 @@ select { font: inherit; border: 1px solid var(--line); border-radius: 6px; paddi
 .sp-credit { position: absolute; bottom: 14px; inset-inline-end: 14px; color: #5f6b80; font: 11px system-ui, sans-serif; }
 @media (max-width: 760px) {
   .sp-card { top: auto; bottom: 0; inset-inline: 0; width: auto; max-height: 48%; border-radius: 14px 14px 0 0; }
-  .sp-hint { inset-inline-end: 14px; bottom: 30px; }
+  .sp-hint { inset-inline-end: 64px; bottom: 30px; }
   .sp-card:not([hidden]) ~ .sp-hint, .sp-card:not([hidden]) ~ .sp-credit { display: none; }
   .sp-bar button span { display: none; }
+  .sp-earth { display: grid; place-items: center; position: absolute; bottom: calc(var(--nav-h) + var(--ticker-h) + 12px); inset-inline-end: 10px; z-index: 3;
+    width: 42px; height: 42px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50%; background: #1f6feb; color: #fff; font-size: 22px;
+    cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .4); }
+  .sp-card:not([hidden]) ~ .sp-earth { display: none; }
 }
 
 /* Kaynak türü etiketi ve "N kaynak bildirdi" rozeti */
@@ -465,3 +471,83 @@ select { font: inherit; border: 1px solid var(--line); border-radius: 6px; paddi
   background: rgba(22, 28, 42, 0.75); color: #c9d4e6; font: 500 12px system-ui, sans-serif; }
 .sp-chips button:hover { background: rgba(255, 198, 26, 0.85); color: #1a1205; }
 @media (max-width: 760px) { .sp-chips { max-width: calc(100% - 28px); overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; } }
+
+/* ---------------- Telefon görünümü: sade üst çubuk, alt gezinme çubuğu, tek katman düğmesi ---------------- */
+.region-pick, .m-layers, .m-space, .bottom-nav { display: none; }
+@media (max-width: 760px) {
+  :root { --nav-h: 58px; }
+  .app { grid-template-rows: var(--top) minmax(0, 1fr) var(--ticker-h) var(--nav-h); }
+  .logo #brandText { display: inline; font-size: 16px; }
+  .topbar { gap: 8px; padding: 0 10px; }
+  .regions, .today, .fin-ticker, #notifyBtn, #aboutBtn, #themeBtn, #toggleFeed, .summary, .feed-tabs { display: none !important; }
+  .maplibregl-ctrl-bottom-left .maplibregl-ctrl-group { display: none; }
+  /* Kaynak yazısı (i) telefonda haritada gösterilmez; Hakkında sayfasında yer alır. Yerine uzay düğmesi. */
+  .maplibregl-ctrl-attrib { display: none; }
+  .m-space { display: grid; place-items: center; position: absolute; bottom: 12px; inset-inline-end: 10px; z-index: 4; width: 42px; height: 42px;
+    border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--text); font-size: 22px; cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .3); }
+  .region-pick { display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto; border: 1px solid var(--line); background: var(--panel-2);
+    border-radius: 999px; padding: 5px 10px 5px 12px; font-weight: 600; font-size: 13px; cursor: pointer; max-width: 55%; }
+  .region-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-layers { display: grid; place-items: center; position: absolute; top: 10px; inset-inline-end: 10px; z-index: 4; width: 42px; height: 42px;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); font-size: 21px; cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .3); }
+  .layers-panel { top: 60px; bottom: auto; left: auto; inset-inline-end: 10px; inset-inline-start: auto; width: min(290px, calc(100% - 20px)); }
+  .m-menu { position: absolute; top: 6px; inset-inline-end: 8px; z-index: 1200; width: min(290px, calc(100% - 16px)); max-height: calc(100% - 20px); overflow-y: auto;
+    padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+  .m-menu > button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; border-radius: 10px; padding: 11px 12px;
+    font-size: 15px; text-align: start; cursor: pointer; }
+  .m-menu > button i { font-size: 20px; color: var(--muted); }
+  .m-menu > button.active { background: var(--accent); color: #fff; }
+  .more-menu { top: auto; bottom: 8px; }
+  .m-sub { margin: 10px 12px 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .m-menu .seg { padding: 0 8px 6px; }
+  .bottom-nav { grid-column: 1 / -1; grid-row: 4; display: flex; background: var(--panel); border-top: 1px solid var(--line); z-index: 1150;
+    padding-bottom: env(safe-area-inset-bottom); }
+  .bottom-nav button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; background: none;
+    color: var(--muted); font-size: 11px; cursor: pointer; min-width: 0; }
+  .bottom-nav button i { font-size: 22px; }
+  .bottom-nav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+  .bottom-nav button.active { color: var(--accent); }
+  /* Haber paneli: kapalıyken sadece özet satırı ve ilk haber görünür; arama ve konular açılınca gelir. */
+  .feed.peek { height: 178px; }
+  .feed.peek .feed-search, .feed.peek .topics { display: none; }
+  .feed.peek .list { overflow: hidden; }
+  .status { padding-top: 0; }
+  .item { padding: 10px 12px; }
+  .item .head { margin-bottom: 5px; gap: 8px; }
+  .item .head .ico { width: 24px; height: 24px; font-size: 13px; border-width: 1.5px; }
+  .item .title { font-size: 14.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .item .thumb { width: 64px; height: 48px; }
+  .item .meta { margin-top: 4px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .info-panel { max-height: calc(100% - 200px); }
+}
+
+/* Hava durumu sayfası: üstte Windy haritası, altında şehir şehir anlık hava */
+.wx-windy { display: block; width: 100%; height: 260px; border: 0; border-radius: 10px; background: #0b1220; }
+.wx-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
+.wx-list { display: grid; gap: 6px; }
+.wx-city { display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "name ico temp" "info info info"; align-items: center; gap: 2px 8px;
+  width: 100%; text-align: start; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: var(--text); padding: 7px 10px; cursor: pointer; font: inherit; }
+.wx-city:hover, .wx-city.active { border-color: #1c7ed6; }
+.wx-city .wx-name { grid-area: name; font-weight: 600; }
+.wx-city i { grid-area: ico; font-size: 20px; color: #1c7ed6; }
+.wx-city b { grid-area: temp; font-size: 17px; }
+.wx-city small { grid-area: info; color: var(--muted); font-size: 11.5px; }
+
+/* Panel tam ekran düğmesi: sadece sayfalarda (hava durumu, TV, hafta…) görünür. */
+.panel-max { display: none; }
+.info-panel.page-mode .panel-max { display: grid; }
+.info-panel.maxed { inset: 8px !important; width: auto !important; max-height: none !important; z-index: 1150; }
+.info-panel.maxed .panel-head { cursor: default; }
+.info-panel.maxed .wx-windy { height: min(55vh, 520px); }
+@media (min-width: 761px) {
+  .info-panel.maxed .wx-list { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+}
+.wx-search { margin: 0 0 8px; }
+.wx-city .wx-name em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.wx-page { display: flex; flex-direction: column; }
+.wx-page > * { order: 2; }
+.wx-page > .wx-search { order: 0; }
+.wx-page.searching > #wxCities { order: 1; margin-bottom: 8px; }
+@media (max-width: 760px) { .info-panel.maxed .wx-windy { height: 42vh; } }

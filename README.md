@@ -1,4 +1,4 @@
-# Zindî — canlı olay haritası
+# GerdûnNews — canlı olay haritası
 
 Kürdistan, Türkiye ve Orta Doğu'daki çatışma, saldırı, protesto, siyasi gelişme ve depremleri harita üzerinde gösteren, **tamamen ücretsiz** çalışan web sitesi.
 Arayüz 5 dilde: **Türkçe, Kurmancî, Soranî, English, العربية** (Soranî ve Arapça sağdan sola).
@@ -18,7 +18,6 @@ Arayüz 5 dilde: **Türkçe, Kurmancî, Soranî, English, العربية** (Sora
 | Uzay İstasyonu (ISS) | wheretheiss.at, tarayıcıda 10 saniyede bir | 0 |
 | Uydular | CelesTrak yörünge verisi (6 saatte bir), konumlar tarayıcıda SGP4 ile | 0 |
 | Uçaklar ve askeri uçuşlar | adsb.lol / adsb.fi, Cloudflare Worker (`worker/`) üzerinden; günde 100.000 istek | 0 |
-| Gemiler | AISStream, GitHub gizli değişkeni `AISSTREAM_API_KEY` ile; her güncellemede 1 dakikalık anlık görüntü | 0 |
 | Haber başlığı ve görseli | Haber sayfasının kendisi (og:title, og:image) | 0 |
 | Başlık çevirisi | Google Çeviri'nin ücretsiz ucu (resmî değil) | 0 |
 | Veri işleme | GitHub Actions, her 15 dk | 0 (public depo) |

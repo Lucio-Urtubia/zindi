@@ -1,4 +1,4 @@
-# Zindî'yi yayına alma
+# GerdûnNews'i yayına alma
 
 Sırayla yapılır. **Hesap açma, şifre ve anahtar girme adımlarını sen yaparsın**; kod tarafını Claude hazırlar.
 Hiçbir adımda gerçek adını, kişisel e-postanı ya da eski hesaplarını kullanma.
@@ -18,7 +18,7 @@ Hiçbir adımda gerçek adını, kişisel e-postanı ya da eski hesaplarını ku
 - Domain Registration → Register Domains → alan adını al (ör. zindi.net, zindi.news). Cloudflare kişisel bilgileri
   WHOIS'te otomatik gizler.
 
-## 4. Zindî sunucusu (uçaklar + site kapalıyken bildirim)
+## 4. GerdûnNews sunucusu (uçaklar + site kapalıyken bildirim)
 Bilgisayarda, proje klasöründe terminalde:
 
 ```
@@ -43,14 +43,13 @@ npx web-push generate-vapid-keys
 - **Private Key** → sadece GitHub'da `VAPID_PRIVATE_KEY` gizli değişkeni. Hiçbir dosyaya yazma.
 
 ## 6. Diğer anahtarlar
-- **AISStream** (gemiler): aisstream.io'da tarafsız e-postayla hesap → API key → GitHub'da `AISSTREAM_API_KEY`.
 - **Mapillary** (sokak fotoğrafları): mapillary.com/dashboard/developers'ta tarafsız hesapla yeni uygulama →
   Client Token → `config.js` içinde `MAPILLARY_TOKEN`. Şimdiki anahtar eski hesaba ait.
 - İsteğe bağlı: Hakkında sayfasında görünecek iletişim adresi → `config.js` içinde `CONTACT`.
 
 ## 7. GitHub deposunun ayarları
 Depo → Settings:
-- **Secrets and variables → Actions → Secrets**: `AISSTREAM_API_KEY`, `PUSH_API` (4. adımdaki adres),
+- **Secrets and variables → Actions → Secrets**: `PUSH_API` (4. adımdaki adres),
   `PUSH_TOKEN`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
 - **Secrets and variables → Actions → Variables**: `SITE_URL` = `https://ALANADIN/`
 - **Pages → Source**: GitHub Actions

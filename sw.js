@@ -1,13 +1,13 @@
 // Sitenin kendi dosyalarını tarayıcıda saklar: ikinci açılış neredeyse beklemesiz olur, internet yokken son hâl görünür.
-//   - Site dosyaları (html, css, js, ikonlar, gezegen dokuları): önce saklanan gösterilir, arkada yenisi indirilir.
+//   - Site dosyaları (html, css, js, ikonlar, gezegen dokuları): önce internetten, olmazsa saklanan.
 //   - Haber verisi (data/): önce internetten; olmazsa saklanan son hâl.
 //   - Sürümü sabit dış kütüphaneler (maplibre, three.js): bir kez indirilip saklanır.
 // Harita karoları ve haber resimleri saklanmaz (çok yer kaplarlar).
-const CACHE = 'zindi-v2';
+const CACHE = 'gerdun-v2';
 const LIBS = /^https:\/\/cdn\.jsdelivr\.net\/npm\/(maplibre-gl|three|satellite\.js|@mapbox\/mapbox-gl-rtl-text|mapillary-js)@\d/;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'index.html', 'style.css', 'icons.css', 'icons.js', 'config.js', 'i18n.js', 'app.js', 'manifest.webmanifest', 'assets/logo/zindi.svg'])).catch(() => {}));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'index.html', 'style.css', 'icons.css', 'icons.js', 'config.js', 'i18n.js', 'app.js', 'manifest.webmanifest', 'assets/logo/gerdun.svg'])).catch(() => {}));
   self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {
@@ -27,11 +27,9 @@ self.addEventListener('fetch', (e) => {
       return res;
     }).catch(() => caches.match(key).then((r) => r || Response.error())));
   } else if (same) {
-    e.respondWith(caches.open(CACHE).then(async (c) => {
-      const hit = await c.match(req);
-      const fresh = fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
-      return hit || fresh;
-    }));
+    // Site dosyaları önce internetten (yeni sürüm hemen görünsün, eski ve yeni dosyalar karışmasın); internet yoksa saklanan.
+    e.respondWith(caches.open(CACHE).then((c) => fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; })
+      .catch(() => c.match(req).then((r) => r || Response.error()))));
   } else if (LIBS.test(req.url)) {
     e.respondWith(caches.open(CACHE).then(async (c) => (await c.match(req)) || fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; })));
   }
@@ -47,7 +45,7 @@ self.addEventListener('notificationclick', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data?.json() || {}; } catch {}
-  e.waitUntil(self.registration.showNotification(d.title || 'Zindî', {
-    body: d.body || '', tag: d.tag, data: { url: d.url || './' }, icon: 'assets/logo/zindi-192.png', badge: 'assets/logo/zindi-192.png',
+  e.waitUntil(self.registration.showNotification(d.title || 'GerdûnNews', {
+    body: d.body || '', tag: d.tag, data: { url: d.url || './' }, icon: 'assets/logo/gerdun-192.png', badge: 'assets/logo/gerdun-192.png',
   }));
 });

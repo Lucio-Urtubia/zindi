@@ -62,6 +62,8 @@ function build() {
     </div>
     <div class="sp-chips"></div>
     <aside class="sp-card" hidden></aside>
+    <!-- Telefonda sağ altta, haritadaki uzay düğmesiyle aynı yerde: tek dokunuşla Dünya'ya dönüş. -->
+    <button type="button" class="sp-earth" data-act="map"><i class="ti ti-world"></i></button>
     <div class="sp-hint"></div>
     <div class="sp-credit"></div>`;
   document.body.appendChild(root);
@@ -188,6 +190,7 @@ function build() {
     if (act === 'overview') overview();
     if (act === 'map') exitToMap();
   });
+  root.querySelector('.sp-earth').addEventListener('click', exitToMap);
   card.addEventListener('click', (e) => {
     const b = e.target.closest('[data-mark],[data-act]');
     if (!b) return;
@@ -711,6 +714,7 @@ function applyLang() {
   const [ov, mp] = root.querySelectorAll('.sp-bar button span');
   ov.textContent = U.overview;
   mp.textContent = U.toMap;
+  root.querySelector('.sp-earth').title = U.toMap;
   root.querySelector('.sp-hint').textContent = `${U.hint} · ${U.today}`;
   root.querySelector('.sp-credit').textContent = U.credit;
   root.querySelector('.sp-chips').innerHTML = ['blackhole', 'comet', 'voyager1', 'voyager2', 'newhorizons', 'jwst', 'iss', 'parker', 'belt', 'kuiper'].map((k) => {

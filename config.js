@@ -4,7 +4,7 @@ window.CONFIG = {
   // sitenin kodunda görünmesi sorun değildir. Almak için: https://www.mapillary.com/dashboard/developers
   // Tırnak işaretlerinin arasına yapıştırın:
   MAPILLARY_TOKEN: '',
-  // Zindî yardımcı sunucusunun adresi (worker/, Cloudflare). Uçaklar ve site kapalıyken bildirim buradan gelir.
+  // GerdûnNews yardımcı sunucusunun adresi (worker/, Cloudflare). Uçaklar ve site kapalıyken bildirim buradan gelir.
   // Boş bırakılırsa uçak katmanı ve kapalıyken bildirim gizlenir. Kurulum: YAYIN.md
   API: 'https://zindi.zindi.workers.dev',
   // Bildirimlerin herkese açık VAPID anahtarı (gizli olanı GitHub'da VAPID_PRIVATE_KEY olarak durur).

@@ -1,6 +1,6 @@
 // Site kapalıyken bildirim: veri güncellemesinden sonra GitHub Actions'ta çalışır.
 // Yeni olayları (son kayıtta olmayanlar) bulur, her abonenin seçtiği bölge ve türe uyanları ona gönderir.
-// Abonelikler Zindî sunucusundan (worker/) gelir; süresi dolanlar oradan silinir.
+// Abonelikler GerdûnNews sunucusundan (worker/) gelir; süresi dolanlar oradan silinir.
 // Ortam değişkenleri: PUSH_API, PUSH_TOKEN, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, SITE_URL, PREV_EVENTS
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
@@ -13,7 +13,7 @@ const { PUSH_API, PUSH_TOKEN, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, SITE_URL = ''
 // Tarayıcıdaki bildirim ayarlarıyla aynı gruplar (app.js NOTIFY_GROUPS).
 const GROUPS = { conflict: ['attack', 'airstrike', 'bombing', 'artillery', 'clash', 'massviolence'], quake: ['earthquake'], disaster: ['disaster'] };
 const MAX_PER_SUB = 3; // bir güncellemede bir aboneye en çok bu kadar bildirim
-const BRAND = 'Zindî';
+const BRAND = 'GerdûnNews';
 
 // Önceki veri: Actions'ta güncellemeden önce kopyalanan dosya (PREV_EVENTS), bilgisayarda son kayıttaki hâli.
 const now = JSON.parse(await fs.readFile(path.join(ROOT, 'data/events.json'), 'utf8'));

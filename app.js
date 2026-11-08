@@ -1,8 +1,8 @@
-// Zindî (canlı olay haritası) — tamamen statik; veriyi data/events.<dil>.js, data/places.js ve data/manual.json'dan okur.
+// GerdûnNews (canlı olay haritası) — tamamen statik; veriyi data/events.<dil>.js, data/places.js ve data/manual.json'dan okur.
 // Harita: MapLibre GL (küre görünümü), OpenFreeMap altlığı.
 
 // Sitenin adı her dilde aynıdır; dile göre değişen T.title ise ne olduğunu anlatır.
-const BRAND = 'Zindî';
+const BRAND = 'GerdûnNews';
 // Her kategori: renkli daire içinde beyaz simge (Tabler Icons).
 const CATS = {
   massviolence: { icon: 'skull',         color: '#6d28d9' },
@@ -57,6 +57,8 @@ const REGIONS = {
   imrali: [[28.505, 40.5], [28.565, 40.575]],
 };
 const IMRALI_CENTER = [28.534, 40.545];
+// Üstte görünen bölge sekmeleri (Kürdistan ve İmralı sekmeleri kaldırıldı; sınırları bildirim ve haftalık özet için duruyor).
+const REGION_TABS = ['all', 'tr', 'sy', 'iq', 'ir', 'il'];
 
 // Bölge sınırları (data/regions.json, scripts/build-regions.mjs ile üretilir): bir bölge sekmesi seçiliyken
 // harita ve haber akışı sadece o sınırların içindeki olayları gösterir.
@@ -78,7 +80,9 @@ const PARAMS = new URLSearchParams(location.search);
 const state = {
   events: [], imrali: [], updated: 0, fresh: 0, off: new Set(), q: '', hours: 6, inView: true, activeId: null,
   lang: pickLang(), newsLang: 'all', region: null, panel: null, topic: 'all',
-  basemap: (() => { try { return localStorage.getItem('basemap') || 'dark'; } catch { return 'dark'; } })(),
+  // Telefonda harita her açılışta uydu görüntüsüyle gelir.
+  basemap: matchMedia('(max-width: 760px)').matches ? 'satellite'
+    : (() => { try { return localStorage.getItem('basemap') || 'dark'; } catch { return 'dark'; } })(),
 };
 state.off.add('starlink'); // ~10.000 uydu: varsayılan kapalı, Katmanlar panelinden açılır
 state.off.add('weather');  // hava durumu ve kesintiler: açılınca yüklenir
@@ -497,7 +501,6 @@ function addEventLayers() {
   map.on('click', 'movers', (ev) => {
     const p = ev.features[0].properties;
     if (p.kind === 'air') { const a = aircraft.get(p.id); if (a) openAir(a); }
-    else { const s = ships.find((x) => x.mmsi === String(p.id)); if (s) openShip(s); }
   });
   map.on('mouseenter', 'movers', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'movers', () => { map.getCanvas().style.cursor = ''; });
@@ -747,12 +750,10 @@ async function refreshSats() {
 const AIR_API = window.CONFIG?.API || ''; // worker/src/index.js
 const AIR_CAT = { icon: 'plane', color: '#f59f00' };
 const MIL_CAT = { icon: 'plane', color: '#e03131' };
-const SHIP_COLORS = { cargo: '#40c057', tanker: '#e64980', passenger: '#4dabf7', fishing: '#ff922b', military: '#adb5bd', other: '#22b8cf' };
-const SHIP_CAT = { icon: 'ship', color: '#1c7ed6' };
 const aircraft = new Map(); // hex -> uçak
-let lastMil = 0, ships = [], shipsUpdated = 0, airMove;
+let lastMil = 0, airMove;
 
-// Rotaya göre döndürülen simgeler: kuzeyi gösteren uçak silüeti ve gemi oku, tuvalde çizilir.
+// Rotaya göre döndürülen simge: kuzeyi gösteren uçak silüeti, tuvalde çizilir.
 function ensureShape(key, color, draw, stroke = 'rgba(0,0,0,0.75)') {
   if (map.hasImage(key)) return key;
   const r = 2, size = 26 * r;
@@ -776,47 +777,6 @@ const planeShape = (ctx) => {
   for (const [x, y] of [[0, -11], [1.6, -8], [1.6, -2.5], [10, 2.5], [10, 4.5], [1.6, 2], [1.4, 7.5], [4, 9.5], [4, 11], [0, 10],
     [-4, 11], [-4, 9.5], [-1.4, 7.5], [-1.6, 2], [-10, 4.5], [-10, 2.5], [-1.6, -2.5], [-1.6, -8]]) ctx.lineTo(x, y);
 };
-// Gemi: yukarıdan görünen gövde (sivri baş, yuvarlak kıç), kıça yakın köprü üstü ve ortada güverte çizgisi.
-// Rengi gemi türünü gösterir; beyaz kenar koyu haritada kaybolmasın diye.
-function ensureShip(type) {
-  const key = `ship2-${type}`;
-  if (map.hasImage(key)) return key;
-  const r = 2, size = 30 * r;
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  ctx.scale(r, r);
-  ctx.translate(15, 15);
-  ctx.shadowColor = 'rgba(0,0,0,0.6)';
-  ctx.shadowBlur = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, -13);
-  ctx.bezierCurveTo(4.5, -9, 5.2, -5, 5.2, -1);
-  ctx.lineTo(5.2, 9);
-  ctx.quadraticCurveTo(5.2, 13, 0, 13);
-  ctx.quadraticCurveTo(-5.2, 13, -5.2, 9);
-  ctx.lineTo(-5.2, -1);
-  ctx.bezierCurveTo(-5.2, -5, -4.5, -9, 0, -13);
-  ctx.closePath();
-  ctx.fillStyle = SHIP_COLORS[type] || SHIP_COLORS.other;
-  ctx.fill();
-  ctx.shadowColor = 'transparent';
-  ctx.lineWidth = 1.3;
-  ctx.strokeStyle = '#ffffff';
-  ctx.stroke();
-  // Köprü üstü (kıça yakın) ve güverte çizgisi.
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillRect(-3.2, 4.5, 6.4, 3.6);
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, -8.5);
-  ctx.lineTo(0, 2.5);
-  ctx.stroke();
-  map.addImage(key, ctx.getImageData(0, 0, size, size), { pixelRatio: r });
-  return key;
-}
-
 function viewRadiusNm() {
   const b = map.getBounds(), c = map.getCenter();
   const km = c.distanceTo(b.getNorthEast()) / 1000;
@@ -863,14 +823,11 @@ function drawMovers() {
   const civ = ensureShape('plane-civ', AIR_CAT.color, planeShape);
   const mil = ensureShape('plane-mil', MIL_CAT.color, planeShape);
   const planes = [...aircraft.values()].filter((a) => !state.off.has(a.mil ? 'mil' : 'aircraft'));
-  const shown = state.off.has('ships') ? [] : ships;
   map.getSource('movers').setData({
     type: 'FeatureCollection',
     features: [
       ...planes.map((a) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
         properties: { kind: 'air', id: a.h, icon: a.mil ? mil : civ, rot: a.trk || 0 } })),
-      ...shown.map((s) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-        properties: { kind: 'ship', id: s.mmsi, icon: ensureShip(s.type), rot: s.hdg ?? s.cog ?? 0 } })),
     ],
   });
   // Açık uçak panelinde sadece değişen değerler yenilenir (fotoğraf her seferinde yeniden yüklenmesin).
@@ -1035,80 +992,10 @@ async function openAir(a) {
   }
 }
 
-// ---- Gemi ayrıntıları ----
-// Fotoğraf: Wikimedia Commons'ta geminin IMO numarasıyla açılmış kategoriden (ücretsiz, açık lisanslı;
-// fotoğrafçı ve lisans gösterilir). Fotoğraf yoksa gemi türünün çizimi görünür.
-// Rota: AIS'teki varış yeri veri betiğinde limana çevrilir (destPort); gemiden limana kesikli çizgi çizilir.
-const shipPhotos = new Map();
-async function loadShipPhoto(s) {
-  if (!s.imo) return null;
-  if (shipPhotos.has(s.imo)) return shipPhotos.get(s.imo);
-  const q = new URLSearchParams({ action: 'query', generator: 'search', gsrsearch: `deepcat:"IMO ${s.imo}"`, gsrnamespace: '6', gsrlimit: '1',
-    prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: '640', format: 'json', origin: '*' });
-  const j = await getJson(`https://commons.wikimedia.org/w/api.php?${q}`);
-  const page = Object.values(j?.query?.pages || {})[0];
-  const info = page?.imageinfo?.[0];
-  const strip = (h) => String(h || '').replace(/<[^>]+>/g, '').trim();
-  const photo = info ? { src: info.thumburl || info.url, link: info.descriptionurl,
-    author: strip(info.extmetadata?.Artist?.value).slice(0, 60), license: strip(info.extmetadata?.LicenseShortName?.value) } : null;
-  shipPhotos.set(s.imo, photo);
-  return photo;
-}
-const shipSpeed = (s) => (s.sog != null ? `${(Math.round(s.sog * 1.852 * 10) / 10).toLocaleString(T.locale)} km/h` : '—');
-function shipHtml(s, photoInfo) {
-  const color = SHIP_COLORS[s.type] || SHIP_COLORS.other;
-  const photo = photoInfo
-    ? `<a class="air-photo" href="${esc(photoInfo.link)}" target="_blank" rel="noopener">${imgHtml(photoInfo.src, '')}</a>
-      <div class="credit">© ${esc(photoInfo.author || 'Wikimedia Commons')} · ${esc(photoInfo.license)} · Wikimedia Commons</div>`
-    : `<div class="air-photo empty" style="--c:${color}"><i class="ti ti-ship"></i></div>`;
-  let route;
-  if (s.destPort) {
-    const [lat, lon, name, code] = s.destPort;
-    const left = Math.round(distKm(s.lat, s.lon, lat, lon));
-    // Varışa kalan süre: AIS'teki tahmini varış, yoksa şu anki hızla hesaplanan.
-    const hours = s.sog > 0.5 ? left / (s.sog * 1.852) : null;
-    const eta = s.eta && s.eta > Date.now() ? s.eta : hours != null ? Date.now() + hours * 3600e3 : null;
-    route = `<div class="route ship-route">
-      <div class="apt"><b>${esc(s.name || s.mmsi)}</b><span>${s.lat.toFixed(2)}°, ${s.lon.toFixed(2)}°</span></div>
-      <div class="route-mid"><div class="route-track"><i class="ti ti-ship" style="inset-inline-start:0%"></i></div>
-        <small>${left.toLocaleString(T.locale)} km</small></div>
-      <div class="apt"><b dir="ltr">${esc(code)}</b><span>${esc(name)}</span>${eta ? `<small>${esc(T.eta)}: ${esc(dateTimeText(eta))}</small>` : ''}</div></div>`;
-  } else {
-    route = `<div class="route-unknown">${s.dest ? `${esc(T.shipDest)}: <b dir="ltr">${esc(s.dest)}</b>` : T.destUnknown}</div>`;
-  }
-  return `${photo}
-    <div class="air-head" style="--c:${color}">
-      <span class="air-badge">${esc(T.shipTypes[s.type] || T.cats.ships)}</span>
-      <h3 dir="ltr">${esc(s.name || s.mmsi)}${s.call ? ` <small>${esc(s.call)}</small>` : ''}</h3>
-    </div>
-    ${route}
-    <div class="tiles">
-      ${tile('gauge', T.speed, shipSpeed(s))}
-      ${tile('compass', T.heading, `${Math.round(s.cog ?? 0)}°`)}
-      ${tile('ship', T.shipSize, s.len ? `${s.len} × ${s.wid} m` : '—')}
-      ${tile('arrow-up', T.draught, s.draught ? `${s.draught} m` : '—')}
-      ${tile('hash', 'IMO', s.imo ? esc(s.imo) : '—')}
-      ${tile('clock', T.lastSignal, ago(s.seen))}
-    </div>
-    <div class="air-foot"><span dir="ltr">MMSI ${esc(s.mmsi)} · ${s.lat.toFixed(3)}°, ${s.lon.toFixed(3)}°</span>
-      <a href="https://www.vesselfinder.com/vessels/details/${esc(s.imo || s.mmsi)}" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> VesselFinder</a></div>`;
-}
 function dateTimeText(t) {
   try { return new Intl.DateTimeFormat(state.lang === 'ku' ? 'tr' : T.locale, { day: 'numeric', month: state.lang === 'ku' ? 'numeric' : 'short', hour: '2-digit', minute: '2-digit' }).format(t); }
   catch { return new Date(t).toLocaleString(); }
 }
-function drawShipRoute(s) {
-  if (!mapReady) return;
-  map.getSource('route').setData({ type: 'FeatureCollection', features: s?.destPort ? [{ type: 'Feature', properties: { done: 0 },
-    geometry: { type: 'LineString', coordinates: [[s.lon, s.lat], [s.destPort[1], s.destPort[0]]] } }] : [] });
-}
-async function openShip(s) {
-  openInfo({ ship: s, photo: shipPhotos.get(s.imo) });
-  drawShipRoute(s);
-  const photo = await loadShipPhoto(s);
-  if (photo && infoOpenFor === `ship:${s.mmsi}`) openInfo({ ship: s, photo });
-}
-
 // ---------------- Sokak fotoğrafları (Mapillary) ----------------
 // Gönüllülerin çektiği sokak fotoğrafları. Mod açıkken fotoğrafı olan sokaklar haritada yeşil çizilir;
 // tıklanınca o noktaya en yakın fotoğraf, içinde yürünebilen bir panelde açılır. Anahtar config.js'de.
@@ -1378,8 +1265,9 @@ function openInfo(target) {
     $('infoBody').innerHTML = PAGES[target].html();
     $('infoPanel').hidden = false;
     $('infoPanel').classList.remove('collapsed');
-    // Telefonda haber paneli aşağı iner; sayfa (TV, Hakkında…) ekranın tamamını kullanır.
-    if (matchMedia('(max-width: 760px)').matches) setSheet('peek');
+    // Telefonda haber akışı kapanır; sayfa (TV, Hakkında…) ekranın tamamını kullanır.
+    if (isMobile()) setSheet('closed');
+    markNav();
     PAGES[target].opened?.();
     renderFinanceBar();
     return;
@@ -1394,13 +1282,11 @@ function openInfo(target) {
     $('infoPanel').classList.remove('collapsed');
     return;
   }
-  infoOpenFor = target === 'iss' ? 'iss' : target.rec ? `sat:${target.norad}` : target.air ? `air:${target.air.h}`
-    : target.ship ? `ship:${target.ship.mmsi}` : target.id;
+  infoOpenFor = target === 'iss' ? 'iss' : target.rec ? `sat:${target.norad}` : target.air ? `air:${target.air.h}` : target.id;
   $('infoTitle').textContent = T.details;
-  if (!target.air && !target.ship) drawRoute(null, null);
-  $('infoPanel').classList.toggle('air-mode', !!(target.air || target.ship));
-  $('infoBody').innerHTML = target === 'iss' ? issHtml() : target.rec ? satHtml(target) : target.air ? airHtml(target.air, target.info)
-    : target.ship ? shipHtml(target.ship, target.photo) : infoHtml(target);
+  if (!target.air) drawRoute(null, null);
+  $('infoPanel').classList.toggle('air-mode', !!target.air);
+  $('infoBody').innerHTML = target === 'iss' ? issHtml() : target.rec ? satHtml(target) : target.air ? airHtml(target.air, target.info) : infoHtml(target);
   const panel = $('infoPanel');
   panel.hidden = false;
   panel.classList.remove('collapsed');
@@ -1409,11 +1295,13 @@ function openInfo(target) {
 function closeInfo() {
   drawRoute(null, null);
   $('infoPanel').hidden = true;
+  setMaxed($('infoPanel'), false);
   stopTv();
   $('infoBody').innerHTML = '';
   infoOpenFor = null;
   setActive(null);
   renderFinanceBar();
+  markNav();
 }
 
 // ---------------- Finans: canlı kurlar ----------------
@@ -1585,7 +1473,7 @@ async function weekOpened() {
 
 // ---------------- Bildirimler ----------------
 // Tarayıcı bildirimi: yeni olay geldiğinde, seçilen bölge ve türe uyuyorsa gösterilir.
-// Zindî sunucusu (CONFIG.API) ve VAPID anahtarı varsa tarayıcı ona abone olur: bildirim site kapalıyken de gelir
+// GerdûnNews sunucusu (CONFIG.API) ve VAPID anahtarı varsa tarayıcı ona abone olur: bildirim site kapalıyken de gelir
 // (gönderen: scripts/push.mjs). Yoksa sadece site bir sekmede açıkken çalışır.
 const NOTIFY_REGIONS = ['kurdistan', 'imrali', 'tr', 'sy', 'iq', 'ir', 'il'];
 const NOTIFY_GROUPS = { conflict: ['attack', 'airstrike', 'bombing', 'artillery', 'clash', 'massviolence'], quake: ['earthquake'], disaster: ['disaster'] };
@@ -1690,7 +1578,9 @@ $('infoBody').addEventListener('click', async (ev) => {
 function aboutHtml() {
   const contact = (window.CONFIG?.CONTACT || '').trim();
   return T.about.s.map(([h, p]) => `<h4 class="fin-group">${esc(h)}</h4><p class="about-text">${esc(p)}</p>`).join('')
-    + (contact ? `<p class="about-text"><i class="ti ti-mail"></i> <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>` : '');
+    + (contact ? `<p class="about-text"><i class="ti ti-mail"></i> <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>` : '')
+    // Telefonda haritadaki kaynak yazısı (i) gizli; aynı yazı burada gösterilir.
+    + (isMobile() ? `<h4 class="fin-group">${esc(T.m.sources)}</h4><p class="about-text map-sources">${document.querySelector('.maplibregl-ctrl-attrib-inner')?.innerHTML || ''}</p>` : '');
 }
 
 const PAGES = {
@@ -1699,6 +1589,7 @@ const PAGES = {
   tv: { title: () => T.x.tv, html: tvHtml, opened: playTv },
   week: { title: () => T.x.week, html: weekHtml, opened: weekOpened },
   notify: { title: () => T.x.notify, html: notifyHtml },
+  weather: { title: () => T.m.weather, html: weatherHtml, opened: weatherOpened },
 };
 
 // ---------------- Hava durumu ve hava kirliliği ----------------
@@ -1740,6 +1631,137 @@ async function updateWeather() {
   }
   drawWeather();
 }
+
+// ---------------- Hava durumu sayfası ----------------
+// Şehir şehir anlık hava: Open-Meteo (anahtarsız; ölçüm 15 dakikada bir yenilenir), sayfa açıkken 10 dakikada bir sorulur.
+// Üstte Windy'nin canlı rüzgâr / yağmur haritası (ücretsiz gömme, anahtar gerekmez). Şehre dokununca Windy ve harita oraya gider.
+// Ad sırası: [tr, en, ku, ckb, ar, enlem, boylam]. Kürdistan her zaman ilk grup.
+const WX_GROUPS = {
+  kurdistan: [['Diyarbakır', 'Diyarbakir', 'Amed', 'ئامەد', 'ديار بكر', 37.91, 40.23], ['Erbil', 'Erbil', 'Hewlêr', 'هەولێر', 'أربيل', 36.19, 44.01],
+    ['Süleymaniye', 'Sulaymaniyah', 'Silêmanî', 'سلێمانی', 'السليمانية', 35.56, 45.44], ['Duhok', 'Duhok', 'Duhok', 'دهۆک', 'دهوك', 36.87, 43],
+    ['Kerkük', 'Kirkuk', 'Kerkûk', 'کەرکووک', 'كركوك', 35.47, 44.39], ['Kamışlı', 'Qamishli', 'Qamişlo', 'قامیشلۆ', 'القامشلي', 37.05, 41.22],
+    ['Kobani', 'Kobani', 'Kobanê', 'کۆبانێ', 'كوباني', 36.89, 38.35], ['Haseke', 'Hasakah', 'Hesekê', 'حەسەکە', 'الحسكة', 36.5, 40.75],
+    ['Van', 'Van', 'Wan', 'وان', 'وان', 38.5, 43.38], ['Urfa', 'Urfa', 'Riha', 'ڕەها', 'أورفة', 37.16, 38.79],
+    ['Mardin', 'Mardin', 'Mêrdîn', 'مێردین', 'ماردين', 37.31, 40.74], ['Hakkari', 'Hakkari', 'Colemêrg', 'جۆلەمێرگ', 'هكاري', 37.57, 43.74],
+    ['Dersim', 'Dersim', 'Dêrsim', 'دێرسیم', 'ديرسم', 39.11, 39.55], ['Mahabad', 'Mahabad', 'Mehabad', 'مەهاباد', 'مهاباد', 36.76, 45.72],
+    ['Urmiye', 'Urmia', 'Ûrmiye', 'ورمێ', 'أرومية', 37.55, 45.07], ['Sine', 'Sanandaj', 'Sine', 'سنە', 'سنندج', 35.31, 47],
+    ['Kirmanşah', 'Kermanshah', 'Kirmaşan', 'کرماشان', 'كرمانشاه', 34.31, 47.07]],
+  tr: [['İstanbul', 'Istanbul', 'Stenbol', 'ئەستەنبوڵ', 'إسطنبول', 41.01, 28.97], ['Ankara', 'Ankara', 'Enqere', 'ئەنقەرە', 'أنقرة', 39.93, 32.86],
+    ['İzmir', 'Izmir', 'Îzmîr', 'ئیزمیر', 'إزمير', 38.42, 27.14], ['Antalya', 'Antalya', 'Antalya', 'ئەنتاڵیا', 'أنطاليا', 36.89, 30.71],
+    ['Adana', 'Adana', 'Edene', 'ئەدەنە', 'أضنة', 37, 35.32], ['Gaziantep', 'Gaziantep', 'Dîlok', 'دیلۆک', 'غازي عنتاب', 37.07, 37.38],
+    ['Erzurum', 'Erzurum', 'Erzirom', 'ئەرزەڕۆم', 'أرضروم', 39.9, 41.27], ['Trabzon', 'Trabzon', 'Trabzon', 'ترابزۆن', 'طرابزون', 41, 39.72]],
+  sy: [['Şam', 'Damascus', 'Şam', 'دیمەشق', 'دمشق', 33.51, 36.29], ['Halep', 'Aleppo', 'Heleb', 'حەلەب', 'حلب', 36.2, 37.16],
+    ['Humus', 'Homs', 'Hims', 'حومس', 'حمص', 34.73, 36.72], ['Lazkiye', 'Latakia', 'Lazqiye', 'لازقیە', 'اللاذقية', 35.52, 35.79],
+    ['Rakka', 'Raqqa', 'Reqa', 'ڕەققە', 'الرقة', 35.95, 39.01], ['Deyrizor', 'Deir ez-Zor', 'Dêrezor', 'دێرەزوور', 'دير الزور', 35.33, 40.14]],
+  iq: [['Bağdat', 'Baghdad', 'Bexda', 'بەغدا', 'بغداد', 33.31, 44.37], ['Musul', 'Mosul', 'Mûsil', 'موسڵ', 'الموصل', 36.34, 43.13],
+    ['Basra', 'Basra', 'Besra', 'بەسرە', 'البصرة', 30.51, 47.78], ['Necef', 'Najaf', 'Necef', 'نەجەف', 'النجف', 32, 44.33]],
+  ir: [['Tahran', 'Tehran', 'Tehran', 'تاران', 'طهران', 35.69, 51.39], ['Tebriz', 'Tabriz', 'Tebrîz', 'تەورێز', 'تبريز', 38.08, 46.29],
+    ['İsfahan', 'Isfahan', 'Isfahan', 'ئەسفەهان', 'أصفهان', 32.65, 51.67], ['Şiraz', 'Shiraz', 'Şîraz', 'شیراز', 'شيراز', 29.59, 52.58],
+    ['Meşhed', 'Mashhad', 'Meşhed', 'مەشهەد', 'مشهد', 36.3, 59.6]],
+  il: [['Kudüs', 'Jerusalem', 'Qudis', 'قودس', 'القدس', 31.77, 35.21], ['Tel Aviv', 'Tel Aviv', 'Tel Avîv', 'تەل ئەڤیڤ', 'تل أبيب', 32.08, 34.78],
+    ['Gazze', 'Gaza', 'Xeze', 'غەززە', 'غزة', 31.5, 34.47]],
+};
+const WX_NAME = { tr: 0, en: 1, ku: 2, ckb: 3, ar: 4 };
+const WX_COUNTRIES = new Set(['TR', 'IQ', 'SY', 'IR', 'IL', 'PS', 'LB', 'JO', 'AM', 'AZ', 'GE', 'CY', 'SA', 'KW', 'EG']);
+let wxNow = null, wxNowAt = 0, wxPoint = [36.5, 42, 5], wxTimer = null, wxQuery = '', wxFound = [], wxSearchTimer = null;
+// Aramada büyük/küçük harf ve şapka/nokta farkı sayılmaz (Erzurum = erzurum, Êlih = elih).
+const wxNorm = (t) => String(t).toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
+const wxMatch = (c) => !wxQuery || c.slice(0, 5).some((n) => n && wxNorm(n).includes(wxQuery));
+const windySrc = ([lat, lon, zoom]) => `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=${zoom}&overlay=wind&product=ecmwf&level=surface&lat=${lat}&lon=${lon}&marker=true`;
+function weatherHtml() {
+  return `<div id="wxPage" class="wx-page"><div class="feed-search wx-search"><i class="ti ti-search"></i><input id="wxSearch" type="search" autocomplete="off" placeholder="${esc(T.m.wx.search)}" value="${esc(wxQuery)}"></div>
+    <p class="about-text wx-note">${esc(T.m.wx.windy)}</p><iframe id="wxWindy" class="wx-windy" src="${windySrc(wxPoint)}" loading="lazy" title="Windy" allowfullscreen></iframe>
+    <p id="wxStamp" class="about-text wx-note"></p><div id="wxCities"></div></div>`;
+}
+function renderWxCities() {
+  if (infoOpenFor !== 'weather' || !$('wxCities')) return;
+  const i = WX_NAME[state.lang] ?? 1, wx = T.m.wx;
+  // Arama yapılırken sonuçlar arama kutusunun hemen altına gelir (Windy haritasının üstüne).
+  $('wxPage').classList.toggle('searching', !!wxQuery);
+  $('wxStamp').textContent = wx.pick + (wxNowAt ? ` · ${wx.upd}: ${new Date(wxNowAt).toLocaleTimeString(T.locale, { hour: '2-digit', minute: '2-digit' })}` : '');
+  const card = (name, lat, lon, w, data, sub = '') => `<button type="button" class="wx-city${wxPoint[0] === lat && wxPoint[1] === lon ? ' active' : ''}" ${data}><span class="wx-name" dir="auto">${esc(name)}${sub ? ` <em>${esc(sub)}</em>` : ''}</span>${w
+      ? `<i class="ti ti-${wxIcon(w.weather_code)}"></i><b>${Math.round(w.temperature_2m)}°</b><small>${esc(wx.feels)} ${Math.round(w.apparent_temperature)}° · ${Math.round(w.wind_speed_10m)} km/h · ${esc(wx.hum)} %${w.relative_humidity_2m}${w.precipitation ? ` · ${esc(wx.rain)} ${w.precipitation} mm` : ''}</small>`
+      : '<small>…</small>'}</button>`;
+  const groups = Object.entries(WX_GROUPS).map(([g, cities]) => {
+    const shown = cities.map((c, n) => [c, n]).filter(([c]) => wxMatch(c));
+    return shown.length ? `<h4 class="fin-group">${esc(T.regions[g])}</h4><div class="wx-list">${shown.map(([c, n]) =>
+      card(c[i] || c[1], c[5], c[6], wxNow?.[g]?.[n], `data-g="${g}" data-n="${n}"`)).join('')}</div>` : '';
+  }).join('');
+  const other = wxQuery && wxFound.length ? `<h4 class="fin-group">${esc(wx.other)}</h4><div class="wx-list">${wxFound.map((p, k) =>
+    card(p.name, p.lat, p.lon, p.w, `data-found="${k}"`, [p.admin, p.country].filter(Boolean).join(', '))).join('')}</div>` : '';
+  $('wxCities').innerHTML = groups + other || `<p class="about-text wx-note">${esc(wxQuery.length < 2 ? '…' : wx.none)}</p>`;
+}
+async function loadWxNow() {
+  if (Date.now() - wxNowAt < 600e3) return;
+  const all = Object.entries(WX_GROUPS).flatMap(([g, cs]) => cs.map((c, n) => [g, n, c]));
+  const r = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${all.map((x) => x[2][5]).join()}&longitude=${all.map((x) => x[2][6]).join()}`
+    + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,precipitation');
+  if (!Array.isArray(r)) return;
+  wxNow = {};
+  all.forEach(([g, n], k) => { (wxNow[g] ||= [])[n] = r[k]?.current; });
+  wxNowAt = Date.now();
+}
+async function weatherOpened() {
+  renderWxCities();
+  await loadWxNow();
+  renderWxCities();
+  clearInterval(wxTimer);
+  wxTimer = setInterval(async () => {
+    if (infoOpenFor !== 'weather') { clearInterval(wxTimer); return; }
+    await loadWxNow();
+    renderWxCities();
+  }, 600e3);
+}
+async function searchWxPlaces(q) {
+  const lang = ['tr', 'en', 'ar'].includes(state.lang) ? state.lang : 'en';
+  const geo = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=${lang}&format=json`);
+  if (wxNorm(q) !== wxQuery) return;
+  const ours = Object.values(WX_GROUPS).flat();
+  // Bölgedeki ülkeler önce: oradan sonuç varsa uzak ülkelerdeki benzer adlar gösterilmez. Aynı yer iki kez çıkmaz.
+  const near = (p) => WX_COUNTRIES.has(p.country_code);
+  // Sadece yerleşim yerleri (havalimanı, dağ vb. değil). Listemizde eşleşen şehir varsa uzak ülkeler hiç gösterilmez.
+  let found = (geo?.results || []).filter((p) => /^(PPL|ADM)/.test(p.feature_code || 'PPL')
+    && !ours.some((c) => Math.abs(c[5] - p.latitude) < 0.15 && Math.abs(c[6] - p.longitude) < 0.15));
+  if (found.some(near) || ours.some(wxMatch)) found = found.filter(near);
+  const seen = new Set();
+  const list = found.map((p) => ({ name: p.name, admin: p.admin1 !== p.name ? p.admin1 : '', country: p.country, lat: +p.latitude.toFixed(2), lon: +p.longitude.toFixed(2) }))
+    .filter((p) => { const k = `${Math.round(p.lat * 10)},${Math.round(p.lon * 10)}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+  if (list.length) {
+    const w = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${list.map((p) => p.lat).join()}&longitude=${list.map((p) => p.lon).join()}`
+      + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,precipitation');
+    const arr = Array.isArray(w) ? w : [w];
+    list.forEach((p, k) => { p.w = arr[k]?.current; });
+  }
+  if (wxNorm(q) !== wxQuery) return;
+  wxFound = list;
+  renderWxCities();
+}
+document.addEventListener('input', (ev) => {
+  if (ev.target.id !== 'wxSearch') return;
+  wxQuery = wxNorm(ev.target.value.trim());
+  wxFound = [];
+  renderWxCities();
+  clearTimeout(wxSearchTimer);
+  if (wxQuery.length >= 2) wxSearchTimer = setTimeout(() => searchWxPlaces(ev.target.value.trim()), 400);
+});
+// Enter: ilk sonuca gider.
+document.addEventListener('keydown', (ev) => {
+  if (ev.target.id === 'wxSearch' && ev.key === 'Enter') { ev.preventDefault(); document.querySelector('#wxCities .wx-city')?.click(); }
+});
+function wxGoTo(lat, lon) {
+  wxPoint = [lat, lon, 8];
+  $('wxWindy').src = windySrc(wxPoint);
+  renderWxCities();
+  map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 7), duration: 1200 });
+  $('wxWindy').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('.wx-city');
+  if (!b) return;
+  if (b.dataset.found != null) { const p = wxFound[+b.dataset.found]; if (p) wxGoTo(p.lat, p.lon); return; }
+  const c = WX_GROUPS[b.dataset.g][+b.dataset.n];
+  wxGoTo(c[5], c[6]);
+});
 
 // ---------------- İnternet kesintileri ----------------
 // IODA (Georgia Tech, anahtarsız): son 24 saatte ülke çapında internet kesintisi algılanan ülkeler. Elektrik kesintisi verisi içermez.
@@ -1783,6 +1805,8 @@ async function updateOutages() {
 function select(e, fly) {
   setActive(e.id);
   openInfo(e);
+  // Telefonda listeden seçilen haber haritada görünsün diye akış kapanır.
+  if (fly && isMobile()) setSheet('closed');
   if (fly) map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), 9), duration: 1200 });
 }
 function setActive(id) {
@@ -1848,8 +1872,17 @@ function makePanel(panel) {
       panel.classList.toggle('collapsed');
       store.set(`panel:${panel.id}`, { ...(store.get(`panel:${panel.id}`) || {}), collapsed: panel.classList.contains('collapsed') });
     }
+    if (act === 'max') setMaxed(panel, !panel.classList.contains('maxed'));
     if (act === 'close') panel.id === 'infoPanel' ? closeInfo() : panel.id === 'streetPanel' ? closeStreet() : togglePanel('layers');
   });
+}
+
+// Tam ekran: panel harita alanının tamamını kaplar; düğme simgesi küçült olur. Küçültülmüşse önce açılır.
+function setMaxed(panel, on) {
+  panel.classList.toggle('maxed', on);
+  if (on) panel.classList.remove('collapsed');
+  const i = panel.querySelector('[data-act="max"] i');
+  if (i) i.className = on ? 'ti ti-minimize' : 'ti ti-maximize';
 }
 
 function resetPanels() {
@@ -1979,8 +2012,7 @@ function renderLayers() {
   $('chips').innerHTML = Object.entries(CATS).filter(([k]) => counts[k]).map(([k, c]) => row(k, c, counts[k])).join('') +
     row('night', NIGHT_CAT, '') + row('heat', HEAT_CAT, '') + row('weather', WX_CAT, '') + row('outages', OUT_CAT, state.off.has('outages') ? '' : outList.length) + row('iss', ISS_CAT, '') + row('sats', SAT_CAT, satCount || '') + row('starlink', STARLINK_CAT, starlinkCount || '') +
     (AIR_API ? row('aircraft', AIR_CAT, [...aircraft.values()].filter((a) => !a.mil).length || '') +
-      row('mil', MIL_CAT, [...aircraft.values()].filter((a) => a.mil).length || '') : '') +
-    (ships.length ? row('ships', SHIP_CAT, ships.length) : '');
+      row('mil', MIL_CAT, [...aircraft.values()].filter((a) => a.mil).length || '') : '');
 }
 
 function renderList(list) {
@@ -2042,9 +2074,9 @@ function render() {
 }
 
 function renderRegions() {
-  $('regions').innerHTML = Object.keys(REGIONS).map((k) =>
+  $('regions').innerHTML = REGION_TABS.map((k) =>
     `<button class="region ${state.region === k ? 'active' : ''}" data-region="${k}">${T.regions[k]}</button>`).join('')
-    + [['tv', 'device-tv', T.x.tv], ['week', 'calendar-week', T.x.week]].map(([p, icon, label]) =>
+    + [['tv', 'device-tv', T.x.tv], ['week', 'calendar-week', T.x.week], ['weather', 'cloud', T.m.weather]].map(([p, icon, label]) =>
       `<button class="region fin-btn" type="button" data-page="${p}"><i class="ti ti-${icon}"></i>${esc(label)}</button>`).join('');
   renderFinanceBar();
 }
@@ -2076,7 +2108,7 @@ function applyLanguage() {
   root.lang = state.lang;
   root.dir = T.dir;
   document.title = `${BRAND} · ${T.title}`;
-  $('brandText').textContent = BRAND;
+  $('brandText').innerHTML = '<span class="brand-a">Gerdûn</span><span class="brand-b">News</span>';
   $('search').placeholder = T.search;
   $('today').textContent = dateText(Date.now());
   for (const [id, key] of [['tabFeed', 'feed'], ['tabLang', 'lang'], ['tabTime', 'time'], ['tabLayers', 'layers']]) {
@@ -2100,6 +2132,7 @@ function applyLanguage() {
   $('newsLangLabel').textContent = T.newsLang;
   renderRegions();
   renderPanels();
+  renderMobile();
   renderTopics();
   applyMapLanguage();
   drawRegion();
@@ -2133,8 +2166,7 @@ function loadScript(file, name) {
 // Her dakika sadece küçük sürüm dosyasına bakılır; veri değişmediyse büyük dosyalar yeniden indirilmez.
 let loadedVersion = null, loadedLang = null;
 async function load() {
-  const [ver, manual, shipData] = await Promise.all([loadJson('data/updated.json'), loadJson('data/manual.json'), loadJson('data/ships.json')]);
-  if (shipData?.ships) { ships = shipData.ships; shipsUpdated = shipData.updated; drawMovers(); }
+  const [ver, manual] = await Promise.all([loadJson('data/updated.json'), loadJson('data/manual.json')]);
   const lang = state.lang;
   if (ver && ver.updated === loadedVersion && lang === loadedLang) return;
   const auto = await loadScript(`data/events.${lang}.js`, '__EVENTS__');
@@ -2182,8 +2214,10 @@ function applyEvents(auto, older, manual, initial) {
 
 $('uiLangs').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-lang]');
-  if (!b) return;
-  state.lang = b.dataset.lang;
+  if (b) setLang(b.dataset.lang);
+});
+function setLang(lang) {
+  state.lang = lang;
   try { localStorage.setItem('lang', state.lang); } catch {}
   applyLanguage();
   load();
@@ -2193,14 +2227,17 @@ $('uiLangs').addEventListener('click', (ev) => {
   syncPush();
   drawWeather();
   drawOutages();
-});
+}
 $('ranges').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-hours]');
-  if (!b) return;
-  state.hours = +b.dataset.hours;
-  renderPanels();
-  render();
+  if (b) setHours(+b.dataset.hours);
 });
+function setHours(h) {
+  state.hours = h;
+  renderPanels();
+  renderMobile();
+  render();
+}
 $('finTicker').addEventListener('click', () => togglePage('finance'));
 $('notifyBtn').addEventListener('click', () => togglePage('notify'));
 $('aboutBtn').addEventListener('click', () => togglePage('about'));
@@ -2208,19 +2245,27 @@ $('regions').addEventListener('click', (ev) => {
   const page = ev.target.closest('[data-page]');
   if (page) { togglePage(page.dataset.page); return; }
   const b = ev.target.closest('[data-region]');
-  if (!b) return;
   // Seçili sekmeye tekrar tıklamak seçimi kaldırır (tüm bölge).
-  state.region = state.region === b.dataset.region ? 'all' : b.dataset.region;
+  if (b) chooseRegion(state.region === b.dataset.region ? 'all' : b.dataset.region);
+});
+function chooseRegion(key) {
+  state.region = key;
   renderRegions();
+  renderMobile();
   drawRegion();
   render();
   flyToRegion(1200);
   if (state.region === 'imrali') openInfo('imrali');
-});
+}
 // Kürdistan ve İmralı'da harita hafifçe eğilir: kenarın yükselmesi yandan görünsün.
 function flyToRegion(duration) {
   const tilt = SPOT.includes(state.region);
-  map.fitBounds(REGIONS[state.region], { padding: tilt ? 60 : 30, duration, pitch: tilt ? 45 : 0, bearing: 0 });
+  map.fitBounds(REGIONS[state.region], { padding: mapPadding(tilt ? 60 : 30), duration, pitch: tilt ? 45 : 0, bearing: 0 });
+}
+// Telefonda haritanın altı haber paneliyle kaplı: bölge panelin üstünde kalan alana sığdırılır.
+const isMobile = () => matchMedia('(max-width: 760px)').matches;
+function mapPadding(p) {
+  return isMobile() ? { top: 20, left: 16, right: 16, bottom: ($('feed').classList.contains('hidden') ? 0 : $('feed').offsetHeight) + 10 } : p;
 }
 document.querySelector('.feed-tabs').addEventListener('click', (ev) => {
   const b = ev.target.closest('.ftab');
@@ -2233,7 +2278,6 @@ $('chips').addEventListener('change', (ev) => {
   if (k === 'iss') updateIss();
   if (k === 'sats' || k === 'starlink') refreshSats();
   if (k === 'aircraft' || k === 'mil') { lastMil = 0; updateAircraft(); }
-  if (k === 'ships') drawMovers();
   if (k === 'night') updateNight();
   if (k === 'weather') updateWeather();
   if (k === 'outages') updateOutages();
@@ -2276,8 +2320,10 @@ const SHEET = ['peek', 'half', 'full'];
 let sheetStart = null;
 function setSheet(level) {
   const feed = $('feed');
-  feed.classList.remove('peek', 'full');
-  if (level !== 'half') feed.classList.add(level);
+  feed.classList.remove('peek', 'full', 'hidden');
+  if (level === 'closed') feed.classList.add('hidden');
+  else if (level !== 'half') feed.classList.add(level);
+  markNav();
 }
 const sheetLevel = () => ($('feed').classList.contains('peek') ? 0 : $('feed').classList.contains('full') ? 2 : 1);
 $('feedHandle').addEventListener('pointerdown', (ev) => { sheetStart = ev.clientY; $('feedHandle').setPointerCapture(ev.pointerId); });
@@ -2288,6 +2334,93 @@ $('feedHandle').addEventListener('pointerup', (ev) => {
   const now = sheetLevel();
   const next = Math.abs(dy) < 8 ? (now + 1) % 3 : Math.max(0, Math.min(2, now + (dy < 0 ? 1 : -1)));
   setSheet(SHEET[next]);
+});
+
+// ---------------- Telefon görünümü ----------------
+// Üstte logo ve bölge seçici, altta uygulama gibi gezinme çubuğu (Harita, Akış, TV, İmralı, Daha fazla).
+// Bilgisayar görünümü bunlardan etkilenmez; bu öğeler sadece dar ekranda görünür.
+function closeMenus() { $('regionMenu').hidden = true; $('moreMenu').hidden = true; }
+function renderMobile() {
+  $('regionPick').querySelector('span').textContent = T.regions[state.region || 'all'];
+  const labels = { map: T.m.map, feed: T.tabs.feed, tv: T.x.tv, weather: T.m.wxShort || T.m.weather, more: T.m.more };
+  for (const b of $('bottomNav').querySelectorAll('[data-nav]')) b.querySelector('span').textContent = labels[b.dataset.nav];
+  $('mLayersBtn').title = T.tabs.layers;
+  $('mSpaceBtn').title = T.m.space;
+  $('regionMenu').innerHTML = REGION_TABS.map((k) =>
+    `<button type="button" data-region="${k}" class="${(state.region || 'all') === k ? 'active' : ''}">${esc(T.regions[k])}</button>`).join('');
+  const item = (act, icon, label) => `<button type="button" data-act="${act}"><i class="ti ti-${icon}"></i>${esc(label)}</button>`;
+  $('moreMenu').innerHTML = item('week', 'calendar-week', T.x.week)
+    + item('notify', 'bell', T.x.notify) + item('finance', 'coin', T.m.finance) + item('theme', 'sun-moon', T.m.theme)
+    + item('about', 'info-circle', T.about.title)
+    + `<div class="m-sub">${esc(T.m.lang)}</div><div class="seg">${Object.entries(I18N).map(([k, v]) =>
+      `<button type="button" data-lang="${k}" class="${k === state.lang ? 'active' : ''}">${v.name}</button>`).join('')}</div>`
+    + `<div class="m-sub">${esc(T.m.time)}</div><div class="seg">${[1, 6, 24, 48].map((h) =>
+      `<button type="button" data-hours="${h}" class="${h === state.hours ? 'active' : ''}">${T.range(h)}</button>`).join('')}</div>`;
+  markNav();
+}
+// Alt çubukta hangi bölümün açık olduğu
+function markNav() {
+  const feed = $('feed');
+  const now = !$('moreMenu').hidden ? 'more' : infoOpenFor === 'tv' ? 'tv'
+    : infoOpenFor === 'weather' ? 'weather' : !feed.classList.contains('peek') && !feed.classList.contains('hidden') ? 'feed' : 'map';
+  for (const b of $('bottomNav').querySelectorAll('[data-nav]')) b.classList.toggle('active', b.dataset.nav === now);
+}
+$('regionPick').addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  $('moreMenu').hidden = true;
+  $('regionMenu').hidden = !$('regionMenu').hidden;
+  markNav();
+});
+$('regionMenu').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-region]');
+  if (!b) return;
+  closeMenus();
+  if (infoOpenFor === 'imrali') closeInfo();
+  chooseRegion(b.dataset.region);
+});
+$('moreMenu').addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  const b = ev.target.closest('button');
+  if (!b) return;
+  if (b.dataset.lang) { setLang(b.dataset.lang); return; }
+  if (b.dataset.hours) { setHours(+b.dataset.hours); return; }
+  closeMenus();
+  const act = b.dataset.act;
+  if (act === 'space') openSpaceView();
+  else if (act === 'theme') $('themeBtn').click();
+  else togglePage(act);
+  markNav();
+});
+$('bottomNav').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-nav]');
+  if (!b) return;
+  ev.stopPropagation();
+  const nav = b.dataset.nav;
+  if (nav !== 'more') closeMenus();
+  if (nav === 'map') {
+    if (infoOpenFor) closeInfo();
+    setSheet('closed');
+    // İmralı'dan haritaya dönünce Kürdistan ortalanır.
+    if (state.region === 'imrali') {
+      chooseRegion('all');
+      map.fitBounds(REGIONS.kurdistan, { padding: mapPadding(0), duration: 1200, pitch: 0, bearing: 0 });
+    }
+  }
+  else if (nav === 'feed') {
+    // Akış sadece bu düğmeyle açılır; açıkken tekrar basınca tamamen kapanır (TV gibi).
+    if (!$('feed').classList.contains('hidden')) setSheet('closed');
+    else { if (infoOpenFor && PAGES[infoOpenFor]) closeInfo(); setSheet('full'); }
+  }
+  else if (nav === 'tv') togglePage('tv');
+  else if (nav === 'weather') { setSheet('closed'); togglePage('weather'); }
+  else { $('regionMenu').hidden = true; $('moreMenu').hidden = !$('moreMenu').hidden; }
+  markNav();
+});
+$('mLayersBtn').addEventListener('click', () => togglePanel('layers'));
+$('mSpaceBtn').addEventListener('click', () => { closeMenus(); openSpaceView(); });
+// Menünün dışına dokununca menü kapanır.
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('.m-menu, #regionPick, #bottomNav')) { closeMenus(); markNav(); }
 });
 map.on('moveend', () => { if (state.inView) renderList(filtered()); });
 window.addEventListener('resize', () => {
@@ -2300,11 +2433,15 @@ makePanel($('infoPanel'));
 makePanel($('layersPanel'));
 makePanel($('streetPanel'));
 if (TOPICS[PARAMS.get('topic')]) state.topic = PARAMS.get('topic');
-if (REGIONS[PARAMS.get('region')]) {
+// Telefonda haber akışı kapalı başlar (Canlı akış düğmesiyle açılır), harita Kürdistan'ı ortalar.
+if (isMobile()) setSheet('closed');
+if (REGION_TABS.includes(PARAMS.get('region'))) {
   state.region = PARAMS.get('region');
   flyToRegion(0);
 } else if (state.topic === 'space') {
   map.jumpTo({ center: [20, 25], zoom: 1.2 });
+} else if (isMobile()) {
+  map.fitBounds(REGIONS.kurdistan, { padding: mapPadding(0), duration: 0 });
 }
 // ?at=enlem,boylam,yakınlık — haritayı belli bir noktada açan paylaşılabilir bağlantı.
 const at = (PARAMS.get('at') || '').split(',').map(Number);
@@ -2321,7 +2458,12 @@ $('notifyBtn').title = T.x.notify;
 $('aboutBtn').title = T.about.title;
 loadJson('data/regions.json').then((r) => { REGION_SHAPES = r || {}; drawRegion(); applyMapLanguage(); render(); });
 // Site dosyalarını tarayıcıda saklayan yardımcı (sw.js): ikinci açılış hızlanır, internet yokken son hâl görünür.
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').then(() => syncPush()).catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // Yeni sürüm yüklenince sayfa bir kez yenilenir: eski sürümün sakladığı dosyalarla karışık açılmasın.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) location.reload(); });
+  navigator.serviceWorker.register('sw.js').then(() => syncPush()).catch(() => {});
+}
 // Simgeler icons.js'ten hazır geldiği için yazı tipi beklenmeden başlanır.
 {
   applyLanguage();

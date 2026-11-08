@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zindî · Canlı Olay Haritası</title>
+  <title>GerdûnNews · Canlı Olay Haritası</title>
   <meta name="description" content="Kürdistan, Türkiye ve Orta Doğu'daki gelişmeleri canlı gösteren ücretsiz harita">
-  <link rel="icon" href="assets/logo/zindi.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/logo/gerdun.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#131a27">
@@ -25,9 +25,11 @@
 <body>
   <div class="app">
     <header class="topbar">
-      <div class="logo"><svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" class="ring-out"/><circle cx="32" cy="32" r="17" class="ring-in"/><circle cx="32" cy="32" r="7" class="dot"/></svg><span id="brandText"></span></div>
+      <div class="logo"><svg class="logo-mark" viewBox="0 0 150 150" aria-hidden="true"><circle cx="75" cy="75" r="68" class="disc"/><path class="star" d="M75.0 35.0L84.9 65.4L116.8 65.4L91.0 84.2L100.9 114.6L75.0 95.8L49.1 114.6L59.0 84.2L33.2 65.4L65.1 65.4Z"/></svg><span id="brandText"></span></div>
       <span id="today" class="today"></span>
       <nav id="regions" class="regions"></nav>
+      <!-- Telefonda bölge sekmeleri yerine tek seçici: dokununca liste açılır. -->
+      <button id="regionPick" class="region-pick mobile-only" type="button"><span></span><i class="ti ti-chevron-down"></i></button>
       <button id="finTicker" class="fin-ticker" type="button" hidden></button>
       <button id="notifyBtn" class="icon-btn notify-btn" type="button" data-page="notify"><i class="ti ti-bell"></i></button>
       <button id="aboutBtn" class="icon-btn" type="button" data-page="about"><i class="ti ti-info-circle"></i></button>
@@ -37,6 +39,12 @@
 
     <div class="mapwrap">
       <div id="map"></div>
+      <!-- Telefonda haritadaki tek düğme: katmanlar (uçak, gemi, harita türü…). -->
+      <button id="mLayersBtn" class="m-layers mobile-only" type="button"><i class="ti ti-stack-2"></i></button>
+      <!-- Telefonda sağ altta uzay görünümü düğmesi (harita kaynakları Hakkında sayfasında). -->
+      <button id="mSpaceBtn" class="m-space mobile-only" type="button"><i class="ti ti-planet"></i></button>
+      <div id="regionMenu" class="m-menu region-menu" hidden></div>
+      <div id="moreMenu" class="m-menu more-menu" hidden></div>
       <!-- Son 24 saatin özeti: tıklanınca o tür olaylar süzülür. -->
       <div id="summary" class="summary" hidden></div>
       <!-- Zaman kaydırıcısı: son 48 saati haritada oynatır. -->
@@ -51,6 +59,8 @@
       <section id="infoPanel" class="panel info-panel" hidden>
         <header class="panel-head">
           <i class="ti ti-info-circle"></i><span id="infoTitle"></span>
+          <!-- Sayfalarda (hava durumu, TV…): haritanın tamamını kaplayacak kadar büyüt / eski boyuta dön. -->
+          <button class="panel-btn panel-max" data-act="max" aria-label="⤢"><i class="ti ti-maximize"></i></button>
           <button class="panel-btn" data-act="collapse" aria-label="−"><i class="ti ti-minus"></i></button>
           <button class="panel-btn" data-act="close" aria-label="×"><i class="ti ti-x"></i></button>
         </header>
@@ -112,6 +122,15 @@
       <span id="tickerLabel" class="ticker-label"></span>
       <div class="ticker-viewport"><div id="tickerTrack" class="ticker-track"></div></div>
     </footer>
+
+    <!-- Telefonda alt gezinme çubuğu (uygulama gibi). -->
+    <nav id="bottomNav" class="bottom-nav mobile-only">
+      <button type="button" data-nav="map"><i class="ti ti-map-2"></i><span></span></button>
+      <button type="button" data-nav="feed"><i class="ti ti-news"></i><span></span></button>
+      <button type="button" data-nav="tv"><i class="ti ti-device-tv"></i><span></span></button>
+      <button type="button" data-nav="weather"><i class="ti ti-cloud"></i><span></span></button>
+      <button type="button" data-nav="more"><i class="ti ti-dots"></i><span></span></button>
+    </nav>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>

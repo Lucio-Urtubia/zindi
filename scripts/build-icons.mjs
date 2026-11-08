@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = '3.19.0';
-const ICONS = `view-360 activity alert-triangle arrow-back-up arrow-up bomb bookmark brand-telegram brand-whatsapp brand-x building
+const ICONS = `maximize minimize view-360 dots coin activity alert-triangle arrow-back-up arrow-up bomb bookmark brand-telegram brand-whatsapp brand-x building
   building-bank camera car circle-dot clock compass crosshair drone external-link flag flame gauge gps hash helicopter helmet
   hexagon id info-circle language layout-off link list map-2 map-pin minus moon moon-stars mountain navigation news pin plane
   planet ripple rocket satellite search share shield-lock ship shoe skull snowflake speakerphone stack-2 sun sun-high swords

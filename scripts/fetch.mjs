@@ -4,7 +4,6 @@
 //   - Telegram: herkese açık kanallar (scripts/sources.json)
 //   - USGS: depremler; GDACS: sel, kasırga, yanardağ, orman yangını, kuraklık
 //   - Launch Library 2: yaklaşan roket fırlatmaları; CelesTrak: uydu yörüngeleri (6 saatte bir)
-//   - AISStream: bölgedeki gemiler (AISSTREAM_API_KEY varsa; 1 dakika dinlenip anlık görüntü alınır)
 //   - GDELT olaylarının gerçek başlığı ve haber görselleri haber sayfasının kendisinden alınır
 //   - Başlıklar sitenin 5 diline çevrilir (Türkçe, Kurmancî, Soranî, İngilizce, Arapça)
 //
@@ -26,7 +25,6 @@ import { enrich } from './lib/enrich.mjs';
 import { fetchDisasters, fetchLaunches } from './lib/hazards.mjs';
 import { inRegion } from './lib/region.mjs';
 import { updateSats } from './lib/sats.mjs';
-import { updateShips } from './lib/ships.mjs';
 import { updateImrali } from './lib/imrali.mjs';
 import { makeSourceTyper } from './lib/sources-meta.mjs';
 import { groupStories } from './lib/stories.mjs';
@@ -116,7 +114,7 @@ async function main() {
     .slice(0, MAX_EVENTS);
 
   // Gemileri dinlemek 1 dakika sürüyor; bu sırada uydular ve haber sayfaları da işlenir.
-  await Promise.all([updateSats(DATA), updateShips(DATA), enrich(events, MAX_PAGES)]);
+  await Promise.all([updateSats(DATA), enrich(events, MAX_PAGES)]);
   await translateTitles(events, MAX_TRANSLATE);
   // İmralı sekmesinin arşivi 48 saat sınırına bağlı değildir; eski haberler de kalır.
   const imrali = await updateImrali(prev.imrali, events);

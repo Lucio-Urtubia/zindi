@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { KURDISTAN } from './lib/kurdistan.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const UA = { 'User-Agent': 'zindi/1.0', Accept: 'application/sparql-results+json' };
+const UA = { 'User-Agent': 'gerdun/1.0', Accept: 'application/sparql-results+json' };
 
 const inRing = (lon, lat, ring) => {
   let inside = false;

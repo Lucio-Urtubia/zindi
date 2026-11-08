@@ -36,8 +36,6 @@ jobs:
           if git fetch --depth=1 origin data; then git checkout FETCH_HEAD -- data; fi
           cp data/events.json "$RUNNER_TEMP/prev-events.json" 2>/dev/null || true
       - run: node scripts/fetch.mjs
-        env:
-          AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
       # Site kapalıyken bildirim: yeni olayları abonelere gönderir. Gizli değişkenler yoksa bu adım atlanır.
       - name: Bildirimleri gönder
         if: ${{ env.PUSH_API != '' }}
@@ -58,8 +56,8 @@ jobs:
           path: _site
       - name: Veriyi data dalına kaydet (tek kayıt, eskisinin yerine)
         run: |
-          git config user.name "zindi-bot"
-          git config user.email "zindi-bot@users.noreply.github.com"
+          git config user.name "gerdun-bot"
+          git config user.email "gerdun-bot@users.noreply.github.com"
           git checkout --orphan data-snapshot
           git read-tree --empty
           git add -f data
