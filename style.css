@@ -551,3 +551,9 @@ select { font: inherit; border: 1px solid var(--line); border-radius: 6px; paddi
 .wx-page > .wx-search { order: 0; }
 .wx-page.searching > #wxCities { order: 1; margin-bottom: 8px; }
 @media (max-width: 760px) { .info-panel.maxed .wx-windy { height: 42vh; } }
+
+/* Haberin altındaki "Çevir" düğmesi: başlığı olduğu yerde seçili dile çevirir. */
+.tr-btn { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 4px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel-2); color: #1c7ed6; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; vertical-align: middle; }
+.tr-btn:hover { border-color: #1c7ed6; }
+.tr-btn:disabled { opacity: .6; cursor: default; }

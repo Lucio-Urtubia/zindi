@@ -1,4 +1,4 @@
-// Zindî — küçük yardımcı sunucu (Cloudflare Workers, ücretsiz plan).
+// GerdûnNews — küçük yardımcı sunucu (Cloudflare Workers, ücretsiz plan).
 //
 // 1) Uçak verisi aracısı. adsb.lol ve adsb.fi (gönüllü ADS-B alıcı ağları) tarayıcıdan doğrudan erişime (CORS)
 //    izin vermiyor; bu servis isteği iletir ve sadece haritanın ihtiyaç duyduğu alanları döndürür.
@@ -11,6 +11,11 @@
 //      POST /push/unsubscribe   { endpoint }                         aboneliği siler
 //      GET  /push/list          (Authorization: Bearer PUSH_TOKEN)   tüm abonelikler
 //      POST /push/remove        (Authorization: Bearer PUSH_TOKEN)   { ids }  süresi dolmuş abonelikleri siler
+//
+// 3) Haber çevirisi. Hazır çevirisi olmayan başlık ve metinler buradan çevrilir (Google Çeviri'nin ücretsiz ucu).
+//    Her metin her dil için bir kez çevrilir ve 30 gün saklanır: sonraki ziyaretçiler hazır çeviriyi alır,
+//    Google'a çok az istek gider. Sadece sitenin kendi adreslerinden gelen isteklere cevap verir.
+//      POST /tr   { sl, tl, q: [metin, …] }   →   { out: [çeviri, …] }   (en çok 40 satır)
 
 const SOURCES = ['https://api.adsb.lol/v2', 'https://opendata.adsb.fi/api/v2'];
 const REGIONS = ['kurdistan', 'imrali', 'tr', 'sy', 'iq', 'ir', 'il'];
@@ -81,6 +86,49 @@ async function subId(endpoint) {
 }
 const pick = (list, allowed) => [...new Set((Array.isArray(list) ? list : []).filter((x) => allowed.includes(x)))];
 
+const TR_TARGETS = ['tr', 'ku', 'ckb', 'en', 'ar'];
+const GOOGLE_CODE = { he: 'iw' };
+async function sha(text) {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(hash)].slice(0, 20).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function translate(req, env, ctx, cors) {
+  const allowed = (env.ALLOWED_ORIGINS || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!allowed.includes(req.headers.get('Origin') || '')) return json({ error: 'yetki yok' }, cors, 403);
+  if (req.method !== 'POST') return json({ error: 'POST bekleniyor' }, cors, 405);
+  let body;
+  try { body = await req.json(); } catch { return json({ error: 'geçersiz istek' }, cors, 400); }
+  const tl = body.tl, sl = typeof body.sl === 'string' && /^[a-z]{2,3}$/.test(body.sl) ? body.sl : 'auto';
+  const q = Array.isArray(body.q) ? body.q.filter((t) => typeof t === 'string').map((t) => t.replace(/\s+/g, ' ').trim().slice(0, 1500)) : [];
+  if (!TR_TARGETS.includes(tl) || !q.length || q.length > 40 || q.join('').length > 8000) return json({ error: 'geçersiz istek' }, cors, 400);
+
+  const cache = caches.default;
+  const keys = await Promise.all(q.map(async (t) => new Request(`https://ceviri.onbellek/${tl}/${sl}/${await sha(t)}`)));
+  const out = await Promise.all(keys.map(async (k) => { const r = await cache.match(k); return r ? r.text() : null; }));
+  const miss = out.map((x, i) => (x == null ? i : -1)).filter((i) => i >= 0);
+  if (miss.length) {
+    let parts = null;
+    try {
+      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=${GOOGLE_CODE[sl] || sl}&tl=${tl}`, {
+        method: 'POST', redirect: 'manual',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: 'q=' + encodeURIComponent(miss.map((i) => q[i]).join('\n')),
+      });
+      if (res.ok) {
+        const all = (await res.json())[0].map((x) => x[0]).join('');
+        parts = miss.length === 1 ? [all.replace(/\s*\n\s*/g, ' ').trim()] : all.split('\n').map((x) => x.trim());
+      }
+    } catch { /* aşağıda hata döner */ }
+    // Satır sayısı tutmazsa site grubu bölüp yeniden sorar.
+    if (!parts || parts.length !== miss.length) return json({ error: 'çeviri alınamadı' }, cors, 502);
+    miss.forEach((i, k) => {
+      out[i] = parts[k];
+      ctx.waitUntil(cache.put(keys[i], new Response(parts[k], { headers: { 'Cache-Control': 'public, max-age=2592000' } })));
+    });
+  }
+  return json({ out }, cors);
+}
+
 async function push(req, env, url, cors) {
   const authorized = env.PUSH_TOKEN && req.headers.get('Authorization') === `Bearer ${env.PUSH_TOKEN}`;
   if (url.pathname === '/push/list' && req.method === 'GET') {
@@ -125,15 +173,16 @@ async function push(req, env, url, cors) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const cors = corsHeaders(req, env);
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
     const url = new URL(req.url);
     if (url.pathname === '/mil' || url.pathname === '/area') return aircraft(url, cors);
+    if (url.pathname === '/tr') return translate(req, env, ctx, cors);
     if (url.pathname.startsWith('/push/')) {
       if (!env.SUBS) return json({ error: 'bildirim deposu kurulmamış' }, cors, 503);
       return push(req, env, url, cors);
     }
-    return new Response('Zindî servisi: /area?lat=&lon=&dist=, /mil, /push/…', { headers: cors });
+    return new Response('GerdûnNews servisi: /area?lat=&lon=&dist=, /mil, /push/…, /tr', { headers: cors });
   },
 };

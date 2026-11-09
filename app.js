@@ -79,7 +79,7 @@ const $ = (id) => document.getElementById(id);
 const PARAMS = new URLSearchParams(location.search);
 const state = {
   events: [], imrali: [], updated: 0, fresh: 0, off: new Set(), q: '', hours: 6, inView: true, activeId: null,
-  lang: pickLang(), newsLang: 'all', region: null, panel: null, topic: 'all',
+  lang: pickLang(), region: null, panel: null, topic: 'all',
   // Telefonda harita her açılışta uydu görüntüsüyle gelir.
   basemap: matchMedia('(max-width: 760px)').matches ? 'satellite'
     : (() => { try { return localStorage.getItem('basemap') || 'dark'; } catch { return 'dark'; } })(),
@@ -1163,6 +1163,100 @@ const isTranslated = (e) => e.lang !== state.lang && !!e.tt?.[state.lang];
 const titleOf = (e) => (isTranslated(e) ? e.tt[state.lang] : e.title);
 const origNote = (e) => (isTranslated(e) ? T.orig(T.langs[newsLangOf(e)] || '') : '');
 
+// Hazır çevirisi olmayan başlıklar ve haber metinleri ziyaretçinin tarayıcısında seçili dile çevrilir
+// (Google Çeviri'nin ücretsiz, anahtarsız ucu; veri betiğindeki çeviriyle aynı). Her metin bir kez denenir.
+// Çeviri olmazsa özgün metin görünür ve haber kartında "Çevir" bağlantısı kalır.
+const textOf = (e) => (e.lang !== state.lang && e.ttx?.[state.lang]) || e.text || '';
+const GT_CODE = { he: 'iw' };
+const trTried = new Set();
+let shownNow = [], trPauseUntil = 0;
+const AUTO_TR = 30;
+const needsTr = (e) => e.title && e.cat !== 'launch' && e.kind !== 'usgs' && e.lang !== state.lang && !e.tt?.[state.lang];
+// Haberin altındaki "Çevir" düğmesi: başlığı (varsa metni de) yeni sekme açmadan, olduğu yerde çevirir.
+async function translateOne(e, btn) {
+  const tl = state.lang;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const out = await gtranslate([e.title.replace(/\s+/g, ' ')], e.lang, tl);
+    if (!out?.[0]) throw new Error('boş');
+    (e.tt ||= {})[tl] = out[0];
+    if (state.lang === tl) { tickerKey = ''; render(); if (infoOpenFor === e.id) openInfo(e); }
+  } catch {
+    // Çeviri şu an alınamıyorsa Google Çeviri sayfası yeni sekmede açılır.
+    window.open(`https://translate.google.com/?sl=auto&tl=${tl}&text=${encodeURIComponent(e.title)}&op=translate`, '_blank', 'noopener');
+    btn.disabled = false;
+    btn.textContent = T.translate;
+  }
+}
+let trBusy = false;
+async function gtranslate(lines, sl, tl) {
+  const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=${GT_CODE[sl] || sl || 'auto'}&tl=${tl}`, {
+    method: 'POST', signal: AbortSignal.timeout(15000),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+    body: 'q=' + encodeURIComponent(lines.join('\n')),
+  });
+  if (!res.ok) throw new Error(res.status);
+  const all = (await res.json())[0].map((x) => x[0]).join('');
+  if (lines.length === 1) return [all.replace(/\s*\n\s*/g, ' ').trim()]; // tek satır: araya giren satır sonu önemsiz
+  const out = all.split('\n').map((x) => x.trim());
+  return out.length === lines.length ? out : null;
+}
+async function fillTranslations(list) {
+  const tl = state.lang;
+  if (trBusy || Date.now() < trPauseUntil) return;
+  // Kendiliğinden sadece listenin başındaki haberler çevrilir (Google'ın ücretsiz ucunu yormamak için);
+  // geri kalanlar haberin altındaki "Çevir" düğmesiyle, olduğu yerde çevrilir.
+  const todo = shownNow.slice(0, AUTO_TR).filter(needsTr).filter((e) => !trTried.has(`${tl}|${e.id}`));
+  if (!todo.length) return;
+  trBusy = true;
+  for (const e of todo) trTried.add(`${tl}|${e.id}`);
+  // Aynı dildeki başlıklar gruplar halinde (en çok 40 satır); dili bilinmeyenler tek tek.
+  const groups = new Map();
+  for (const e of todo) { const k = e.lang || `?${e.id}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); }
+  let changed = false, failed = false;
+  // Çeviri satır sayısını tutturamazsa (bazen iki başlığı birleştiriyor) grup ikiye bölünüp yeniden denenir.
+  const run = async (part) => {
+    const out = await gtranslate(part.map((e) => e.title.replace(/\s+/g, ' ')), part[0].lang, tl);
+    await new Promise((r) => setTimeout(r, 300)); // ücretsiz uç çok sık istekte geçici olarak engelliyor
+    if (state.lang !== tl) return;
+    if (out) part.forEach((e, k) => { if (out[k]) { (e.tt ||= {})[tl] = out[k]; changed = true; } });
+    else if (part.length > 1) { const h = Math.ceil(part.length / 2); await run(part.slice(0, h)); await run(part.slice(h)); }
+  };
+  try {
+    for (const items of groups.values()) {
+      for (let i = 0; i < items.length; i += 40) await run(items.slice(i, i + 40));
+      if (state.lang !== tl) return;
+    }
+  } catch {
+    // Geçici hata (bağlantı, çok sık istek): çevrilemeyenler yarım dakika sonra yeniden denenir.
+    failed = true;
+    trPauseUntil = Date.now() + 29e3;
+    for (const e of todo) if (!e.tt?.[tl]) trTried.delete(`${tl}|${e.id}`);
+    setTimeout(() => fillTranslations(filtered()), 30e3);
+  } finally {
+    trBusy = false;
+    // Bu arada dil değiştiyse yeni dilin çevirisi hemen başlar.
+    if (state.lang !== tl) {
+      for (const e of todo) if (!e.tt?.[tl]) trTried.delete(`${tl}|${e.id}`); // yarım kalanlar o dile dönülünce çevrilir
+      fillTranslations(filtered());
+    }
+    else if (changed) { tickerKey = ''; render(); }
+    else if (!failed) fillTranslations(filtered()); // sıradaki grup (hata olduysa yarım dakika beklenir)
+  }
+}
+async function translateInfo(e) {
+  const tl = state.lang;
+  if (!e.text || e.lang === tl || e.ttx?.[tl]) return;
+  try {
+    const out = await gtranslate([e.text.replace(/\s+/g, ' ').slice(0, 1500)], e.lang, tl);
+    if (!out?.[0] || state.lang !== tl) return;
+    (e.ttx ||= {})[tl] = out[0];
+    const p = infoOpenFor === e.id && document.querySelector('#infoBody .info-text');
+    if (p) p.textContent = out[0].slice(0, 600) + (out[0].length > 600 ? '…' : '');
+  } catch { /* özgün metin kalır */ }
+}
+
 function translateLink(e) {
   if (e.lang === state.lang || isTranslated(e) || e.cat === 'launch') return '';
   const url = `https://translate.google.com/?sl=auto&tl=${state.lang}&text=${encodeURIComponent(e.title)}&op=translate`;
@@ -1181,7 +1275,7 @@ function infoHtml(e) {
     <div class="info-cat">${icoHtml(e)}<span>${esc(catLabel(e))}</span></div>
     <h3 class="info-title" dir="auto">${esc(titleOf(e))}</h3>
     ${isTranslated(e) ? `<div class="info-orig" dir="auto"><b>${esc(origNote(e))}:</b> ${esc(e.title)}</div>` : ''}
-    ${e.text ? `<p class="info-text" dir="auto">${esc(e.text.slice(0, 600))}${e.text.length > 600 ? '…' : ''}</p>` : ''}
+    ${e.text ? `<p class="info-text" dir="auto">${esc(textOf(e).slice(0, 600))}${textOf(e).length > 600 ? '…' : ''}</p>` : ''}
     <dl class="info-facts">
       <dt><i class="ti ti-map-pin"></i></dt><dd>${esc(placeName(e))}</dd>
       <dt><i class="ti ti-clock"></i></dt><dd>${whenOf(e)}</dd>
@@ -1287,6 +1381,7 @@ function openInfo(target) {
   if (!target.air) drawRoute(null, null);
   $('infoPanel').classList.toggle('air-mode', !!target.air);
   $('infoBody').innerHTML = target === 'iss' ? issHtml() : target.rec ? satHtml(target) : target.air ? airHtml(target.air, target.info) : infoHtml(target);
+  if (target !== 'iss' && !target.rec && !target.air) translateInfo(target);
   const panel = $('infoPanel');
   panel.hidden = false;
   panel.classList.remove('collapsed');
@@ -1978,14 +2073,14 @@ function inRange() {
   // Zaman kaydırıcısı kullanılıyorsa (state.timeAt) pencere o ana göre kayar; yoksa son veri güncellemesine göre.
   const end = state.timeAt ?? Infinity;
   const since = state.timeAt != null ? state.timeAt - state.hours * 3600e3 : sinceMs();
-  return state.events.filter((e) => e.t >= since && e.t <= end && (state.newsLang === 'all' || newsLangOf(e) === state.newsLang));
+  return state.events.filter((e) => e.t >= since && e.t <= end);
 }
 
 function filtered() {
   const q = state.q.toLowerCase();
   const found = (e) => !q || `${e.title} ${titleOf(e)} ${e.text || ''} ${placeName(e)} ${e.place || ''} ${e.src || ''}`.toLowerCase().includes(q);
   // İmralı: zaman aralığına bağlı olmayan arşiv; son 48 saatte haber olmasa da en son haberler görünür.
-  if (state.region === 'imrali') return state.imrali.filter((e) => (state.newsLang === 'all' || newsLangOf(e) === state.newsLang) && found(e));
+  if (state.region === 'imrali') return state.imrali.filter(found);
   const reg = activeRegion();
   const sum = state.sumFilter && SUMMARY[state.sumFilter];
   const list = inRange().filter((e) => !state.off.has(e.cat) && TOPICS[state.topic](e) && (!sum || sum.includes(e.cat)) &&
@@ -2026,7 +2121,8 @@ function renderList(list) {
     state.updated ? `${T.updated}: ${ago(state.updated)}` : T.noData,
     state.fresh ? T.fresh(state.fresh) : '',
   ].filter(Boolean).join(' · ');
-  $('list').innerHTML = shown.slice(0, 400).map((e) => `
+  shownNow = shown.slice(0, 400);
+  $('list').innerHTML = shownNow.map((e) => `
     <li class="item ${e.id === state.activeId ? 'active' : ''} ${e.isNew ? 'new' : ''}" data-id="${esc(e.id)}">
       <div class="head">
         ${icoHtml(e)}
@@ -2038,7 +2134,7 @@ function renderList(list) {
         <div class="title" dir="auto" ${isTranslated(e) ? `title="${esc(e.title)}"` : ''}>${e.isNew ? `<span class="badge">${T.badge}</span>` : ''}${esc(titleOf(e))}</div>
         ${e.img ? imgHtml(e.img, 'thumb') : ''}
       </div>
-      <div class="meta">${esc(placeName(e))} · ${esc(e.src || '')}${typeTag(e.st)}${e.cat === 'disaster' ? ' · ' + esc(catLabel(e)) : ''}${origNote(e) ? ' · ' + esc(origNote(e)) : ''}${translateLink(e) ? ' · ' + translateLink(e) : ''}</div>
+      <div class="meta">${esc(placeName(e))} · ${esc(e.src || '')}${typeTag(e.st)}${e.cat === 'disaster' ? ' · ' + esc(catLabel(e)) : ''}${origNote(e) ? ' · ' + esc(origNote(e)) : ''}${needsTr(e) ? ` <button type="button" class="tr-btn" data-tr="${esc(e.id)}"><i class="ti ti-language"></i>${esc(T.translate)}</button>` : ''}</div>
     </li>`).join('');
 }
 
@@ -2068,6 +2164,7 @@ function render() {
   renderMarkers(state.region === 'imrali' ? [] : list);
   renderList(list);
   renderTicker(list);
+  fillTranslations(list);
   if (infoOpenFor === 'imrali') openInfo('imrali');
   if (infoOpenFor === 'finance') openInfo('finance');
   else if (infoOpenFor && infoOpenFor !== 'iss' && byId.has(infoOpenFor)) openInfo(byId.get(infoOpenFor));
@@ -2096,9 +2193,6 @@ function renderPanels() {
     `<button data-lang="${k}" class="${k === state.lang ? 'active' : ''}">${v.name}</button>`).join('');
   $('ranges').innerHTML = [1, 6, 24, 48].map((h) =>
     `<button data-hours="${h}" class="${h === state.hours ? 'active' : ''}">${T.range(h)}</button>`).join('');
-  $('newsLang').innerHTML = `<option value="all">${T.all}</option>` +
-    NEWS_LANGS.map((l) => `<option value="${l}">${T.langs[l]}</option>`).join('');
-  $('newsLang').value = state.newsLang;
 }
 
 // Arayüz dilini uygula: metinler, yön (sağdan sola), tarih, harita adları.
@@ -2129,7 +2223,6 @@ function applyLanguage() {
   $('streetTitle').textContent = T.street;
   renderBasemaps();
   $('inViewLabel').textContent = T.inView;
-  $('newsLangLabel').textContent = T.newsLang;
   renderRegions();
   renderPanels();
   renderMobile();
@@ -2298,6 +2391,8 @@ $('topics').addEventListener('click', (ev) => {
   if (state.topic === 'space') map.flyTo({ center: [20, 25], zoom: 1.2, duration: 1200 });
 });
 $('list').addEventListener('click', (ev) => {
+  const trb = ev.target.closest('.tr-btn');
+  if (trb) { const e = byId.get(trb.dataset.tr); if (e) translateOne(e, trb); return; }
   if (ev.target.closest('a')) return;
   const li = ev.target.closest('.item');
   const e = li && byId.get(li.dataset.id);
@@ -2306,7 +2401,6 @@ $('list').addEventListener('click', (ev) => {
 });
 let typing;
 $('search').addEventListener('input', (ev) => { clearTimeout(typing); typing = setTimeout(() => { state.q = ev.target.value.trim(); render(); }, 200); });
-$('newsLang').addEventListener('change', (ev) => { state.newsLang = ev.target.value; render(); });
 $('inView').addEventListener('change', (ev) => { state.inView = ev.target.checked; renderList(filtered()); });
 $('toggleFeed').addEventListener('click', () => { $('feed').classList.toggle('hidden'); map.resize(); });
 // Açık / koyu tema düğmesi; seçim tarayıcıda hatırlanır.
