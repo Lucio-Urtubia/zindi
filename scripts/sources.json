@@ -1,5 +1,5 @@
 {
-  "_aciklama": "Haber kaynakları. Yeni kaynak eklemek için aynı biçimde satır ekleyin. lang: tr, ku (Kurmancî), ckb (Soranî), ar, fa, en. Telegram için sadece kanal adı yazılır (t.me/KANAL). type: kaynağın türü — official (resmî/devlet), kurdish (Kürt medyası), independent (bağımsız), mainstream (Türkiye ana akım), international (uluslararası).",
+  "_aciklama": "Haber kaynakları. Yeni kaynak eklemek için aynı biçimde satır ekleyin. lang: tr, ku (Kurmancî), ckb (Soranî), ar, fa, en; birden fazla dilde yazan kanallar için auto (her mesajın dili yazısından tahmin edilir). Telegram için sadece kanal adı yazılır (t.me/KANAL). type: kaynağın türü — official (resmî/devlet), kurdish (Kürt medyası), independent (bağımsız), mainstream (Türkiye ana akım), international (uluslararası).",
   "rss": [
     { "name": "BBC Türkçe", "lang": "tr", "url": "https://feeds.bbci.co.uk/turkce/rss.xml", "type": "international" },
     { "name": "Anadolu Ajansı", "lang": "tr", "url": "https://www.aa.com.tr/tr/rss/default?cat=guncel", "type": "official" },
@@ -63,6 +63,20 @@
     { "name": "Kurdistan24", "lang": "en", "channel": "Kurdistan24English", "type": "kurdish" },
     { "name": "North Press", "lang": "en", "channel": "npasyria", "type": "kurdish" },
     { "name": "Cyprus Mail", "lang": "en", "channel": "cyprus_mail", "type": "international" },
-    { "name": "IDF", "lang": "en", "channel": "idfofficial", "type": "official" }
+    { "name": "IDF", "lang": "en", "channel": "idfofficial", "type": "official" },
+    { "name": "Rojava Gündemi", "lang": "tr", "channel": "Rojava_Gundemi", "type": "kurdish" },
+    { "name": "ROJEV Mexmûr", "lang": "auto", "channel": "rojev_mexmur", "type": "kurdish" },
+    { "name": "JIN TV", "lang": "auto", "channel": "JinTvOfficial", "type": "kurdish" },
+    { "name": "Lekolîn", "lang": "auto", "channel": "lekolinorg", "type": "kurdish" },
+    { "name": "Enformasyon", "lang": "tr", "channel": "enformasyon", "type": "independent" },
+    { "name": "SabraTM", "lang": "tr", "channel": "SabraTM", "type": "independent" },
+    { "name": "Sanayi Savunma Türkiye", "lang": "tr", "channel": "sanayisavunmatr", "type": "mainstream" },
+    { "name": "GDH Defence", "lang": "tr", "channel": "gdhdefence", "type": "mainstream" },
+    { "name": "BBC Türkçe", "lang": "tr", "channel": "BBC_Turkce", "type": "international" },
+    { "name": "Military Summary", "lang": "en", "channel": "militarysummary", "type": "international" },
+    { "name": "Intel Slava", "lang": "en", "channel": "intelslava", "type": "international" },
+    { "name": "Middle East Spectator", "lang": "en", "channel": "Middle_East_Spectator", "type": "international" },
+    { "name": "IRNA Türkçe", "lang": "tr", "channel": "Irna_tr", "type": "official" },
+    { "name": "SANA Türk", "lang": "tr", "channel": "SuriyeArapHaberAjansI", "type": "official" }
   ]
 }

@@ -57,6 +57,18 @@ async function readRss(feed, since) {
   return out;
 }
 
+// Birden fazla dilde yazan kanallar (sources.json'da "lang": "auto"): her mesajın dili yazısından tahmin edilir.
+// Arap harfi + Soranîye özgü harfler → ckb, sadece Arap harfi → ar. Latin harflerde Türkçeye özgü (ı ğ ö ü) ve
+// Kurmancîye özgü (ê î û) harfler sayılır, hangisi çoksa o dil (ş ve ç ikisinde de var, sayılmaz); hiçbiri yoksa en.
+function guessLang(text) {
+  if (/[؀-ۿ]/.test(text)) return /[ڕڵێۆەڤگچپژ]/.test(text) ? 'ckb' : 'ar';
+  const tr = (text.match(/[ıİğĞöÖüÜ]/g) || []).length;
+  const ku = (text.match(/[êÊîÎûÛ]/g) || []).length;
+  if (ku > tr) return 'ku';
+  if (tr) return 'tr';
+  return /[şŞçÇ]/.test(text) ? 'tr' : 'en';
+}
+
 async function readTelegram(ch, since) {
   const html = await (await get(`https://t.me/s/${ch.channel}`)).text();
   const out = [];
@@ -68,10 +80,14 @@ async function readTelegram(ch, since) {
     const t = Date.parse(time) || Date.now();
     if (t < since) continue;
     const full = stripTags(body);
-    const [first, ...rest] = full.split('\n').filter((l) => l.trim());
+    const lines = full.split('\n').filter((l) => l.trim());
+    // Başta sadece etiket ya da çok kısa bir satır varsa ("#PODCAST", "Biliyor muydunuz? 🤔") başlık bir sonraki satırdan alınır.
+    while (lines.length > 1 && (/^\s*(#\S+\s*)+$/.test(lines[0]) || lines[0].replace(/[^\p{L}\p{N}]/gu, '').length < 20)) lines.shift();
+    if (!lines.length) continue;
+    const [first, ...rest] = lines;
     const title = first.length > 220 ? first.slice(0, 217) + '…' : first;
     const img = chunk.match(/tgme_widget_message_photo_wrap[^>]+background-image:url\('([^']+)'\)/)?.[1];
-    const e = toEvent({ id: 'tg:' + post, t, title, text: [first.length > 220 ? first : '', ...rest].join(' ').trim(), url: `https://t.me/${post}`, src: ch.name, lang: ch.lang, kind: 'telegram', img });
+    const e = toEvent({ id: 'tg:' + post, t, title, text: [first.length > 220 ? first : '', ...rest].join(' ').trim(), url: `https://t.me/${post}`, src: ch.name, lang: ch.lang === 'auto' ? guessLang(full) : ch.lang, kind: 'telegram', img });
     if (e) out.push(e);
   }
   return out;
