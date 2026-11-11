@@ -1110,6 +1110,9 @@ async function openStreet(imageId) {
 // ---------------- Yardımcılar ----------------
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Haber bağlantıları dış kaynaklardan gelir; sadece http(s) adreslerine izin verilir.
+// Böylece kötü niyetli bir besleme "javascript:…" gibi bir adres koyup tıklayınca kod çalıştıramaz.
+const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : '');
 const cat = (e) => CATS[e.cat] || CATS.news;
 const iconOf = (e) => DISASTER_ICONS[e.sub] || cat(e).icon;
 const colorOf = (e) => ALERT_COLORS[e.alert] || cat(e).color;
@@ -1558,7 +1561,7 @@ function weekHtml() {
     <table class="fin-table"><thead><tr>${T.x.weekCol.map((c, i) => (i ? `<td class="week-head">${esc(c)}</td>` : `<th class="week-head">${esc(c)}</th>`)).join('')}</tr></thead>
       <tbody>${WEEK_REGIONS.map((k) => `<tr><th scope="row">${esc(T.regions[k])}</th><td>${num(sum(k, 'total'))}</td><td>${num(sum(k, 'conflict'))}</td></tr>`).join('')}</tbody></table>
     <h4 class="fin-group">${esc(T.x.weekTop)}</h4>
-    <ol class="imrali-list">${top.map((e) => `<li><a href="${esc(e.url || '#')}" target="_blank" rel="noopener" dir="auto">${esc(titleOf(e))}</a><small>${esc(e.src || '')}</small></li>`).join('')}</ol>
+    <ol class="imrali-list">${top.map((e) => `<li><a href="${esc(safeUrl(e.url) || '#')}" target="_blank" rel="noopener" dir="auto">${esc(titleOf(e))}</a><small>${esc(e.src || '')}</small></li>`).join('')}</ol>
     <p class="fin-note">${esc(T.x.weekNote(keys.length))}</p>
     <div class="share"><span>${esc(T.share)}</span><button type="button" data-copy="${esc(link)}" title="${esc(T.copyLink)}"><i class="ti ti-link"></i></button></div>`;
 }
@@ -2296,8 +2299,10 @@ function applyEvents(auto, older, manual, initial) {
   }
   const newImrali = (auto?.imrali?.items || []).filter((e) => !first && !byId.has(e.id));
   notifyNew(first ? [] : events.filter((e) => !before.has(e.id)), newImrali);
-  state.events = events;
   state.imrali = auto?.imrali?.items || [];
+  // Güvenlik: http(s) olmayan bağlantıları (ör. javascript:) at.
+  for (const e of [...events, ...state.imrali]) if (e.url && !safeUrl(e.url)) e.url = undefined;
+  state.events = events;
   byId.clear();
   for (const e of [...state.imrali, ...events]) byId.set(e.id, e);
   state.updated = auto?.updated || 0;

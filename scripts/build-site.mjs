@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, '_site');
 const FILES = ['index.html', 'manifest.webmanifest', 'sw.js', 'config.js', 'i18n.js', 'app.js', 'style.css', 'icons.css', 'icons.js',
-  'space.js', 'space-data.js', 'space-extras.js'];
+  'space.js', 'space-data.js', 'space-extras.js', '_headers'];
 const DIRS = ['assets', 'data'];
 const SKIP = new Set(['data/events.json']);
 const FORBIDDEN = await fs.readFile(path.join(ROOT, '.yayin-yasak'), 'utf8')

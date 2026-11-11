@@ -1,0 +1,11 @@
+# Güvenlik başlıkları (Cloudflare Pages bunları uygular; GitHub Pages yok sayar).
+# frame-ancestors / X-Frame-Options: site başka bir sayfaya iframe ile gömülemez (clickjacking engeli).
+# object-src/base-uri/form-action: eklenti ve adres manipülasyonunu kapatır. Kaynak yükleme (harita, TV, görsel)
+# kısıtlanmaz; bu yüzden sitenin görünümü değişmez.
+/*
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=()
