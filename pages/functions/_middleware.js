@@ -3,6 +3,18 @@
 // ("gerdun-log", tablo: worker/schema/log.sql) yazılır. Resim, stil ve kod dosyaları bu koddan hiç geçmez
 // (_routes.json); veri dosyalarının dakikada bir yapılan başarılı istekleri de kaydedilmez.
 // Eski kayıtlar yardımcı sunucunun (worker) günlük görevinde silinir. Bakmak için: node scripts/ip-log.mjs
+// Aynı IP'den dakikada en çok 15 log satırı: bir tarayıcı çok sayıda adres deneyip D1 kotasını şişiremesin.
+// Bellekte tutulur (veri merkezi başına, ek maliyet yok); sayfa açılışını hiç engellemez, sadece log yazmayı kısar.
+const logHits = new Map();
+function logLimited(ip) {
+  if (!ip) return false;
+  const now = Date.now();
+  if (logHits.size > 20000) for (const [k, v] of logHits) if (v.reset < now) logHits.delete(k);
+  let h = logHits.get(ip);
+  if (!h || h.reset < now) { h = { n: 0, reset: now + 60000 }; logHits.set(ip, h); }
+  return ++h.n > 15;
+}
+
 export async function onRequest(context) {
   const { request: req, env } = context;
   let res, status;
@@ -17,7 +29,7 @@ export async function onRequest(context) {
     // Buraya sadece sayfa ve veri istekleri ile sitede olmayan adresler gelir (Pages bilinmeyen adreste de ana
     // sayfayı 200 ile döndürür; taramalar bu yüzden adresinden tanınır). Veri dosyalarının başarılı istekleri atlanır.
     const worth = !url.pathname.startsWith('/data/') || (status ?? 500) >= 400 || !['GET', 'HEAD'].includes(req.method);
-    if (env.LOG && worth) context.waitUntil(write(env, req, url, status ?? 500));
+    if (env.LOG && worth && !logLimited(req.headers.get('CF-Connecting-IP'))) context.waitUntil(write(env, req, url, status ?? 500));
   }
   return res;
 }

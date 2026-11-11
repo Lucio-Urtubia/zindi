@@ -179,6 +179,7 @@ async function push(req, env, url, cors) {
 async function logRequest(env, req, status, src) {
   if (!env.LOG) return;
   const url = new URL(req.url), cf = req.cf || {}, h = req.headers;
+  if (logLimit(h.get('CF-Connecting-IP'))) return; // aynı IP'den dakikalık log sınırı aşıldıysa yazma
   const cut = (v, n) => (v ? String(v).slice(0, n) : null);
   try {
     await env.LOG.prepare('INSERT INTO log (t, ip, country, city, asn, org, method, host, path, status, ua, ref, src) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
@@ -187,6 +188,23 @@ async function logRequest(env, req, status, src) {
       .run();
   } catch { /* kayıt yazılamazsa istek yine de cevaplanır */ }
 }
+
+// Basit kötüye kullanım sınırı: aynı IP kısa sürede çok istek atarsa (sel/tarama) engellenir.
+// Worker belleğinde tutulur (veri merkezi başına, kalıcı depo ya da ek maliyet yok). Gerçek kullanıcıyı
+// etkilemeyecek kadar geniş; asıl koruma Cloudflare panelindeki Rate Limiting + Bot Fight Mode, bu ona ek emniyettir.
+function limiter(max, windowMs) {
+  const m = new Map();
+  return (ip) => {
+    if (!ip) return false;
+    const now = Date.now();
+    if (m.size > 20000) for (const [k, v] of m) if (v.reset < now) m.delete(k); // belleği temiz tut
+    let h = m.get(ip);
+    if (!h || h.reset < now) { h = { n: 0, reset: now + windowMs }; m.set(ip, h); }
+    return ++h.n > max;
+  };
+}
+const floodLimit = limiter(120, 10000); // IP başına 10 saniyede 120 istek: aşınca 429
+const logLimit = limiter(15, 60000);    // IP başına dakikada en çok 15 log satırı: D1 kotası şişmesin
 
 async function route(req, env, ctx, cors) {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -203,6 +221,10 @@ async function route(req, env, ctx, cors) {
 export default {
   async fetch(req, env, ctx) {
     const cors = corsHeaders(req, env);
+    // Sel koruması: aşırı istek atan IP, upstream'e ve loga hiç gitmeden 429 alır.
+    if (req.method !== 'OPTIONS' && floodLimit(req.headers.get('CF-Connecting-IP'))) {
+      return json({ error: 'çok fazla istek' }, cors, 429);
+    }
     let res;
     try {
       res = await route(req, env, ctx, cors);
