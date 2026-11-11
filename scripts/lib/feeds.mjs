@@ -51,7 +51,7 @@ async function readRss(feed, since) {
     const t = Date.parse(decodeEntities(date).trim()) || Date.now();
     if (t < since) continue;
     const text = stripTags(tag(b, 'description') || tag(b, 'summary')).replace(/\s+/g, ' ');
-    const e = toEvent({ id: 'r' + hash(url || title), t: Math.min(t, Date.now()), title, text, url, src: feed.name, lang: feed.lang, kind: 'rss', img: rssImage(b) });
+    const e = toEvent({ id: 'r' + hash(url || title), t: Math.min(t, Date.now()), title, text, url, src: feed.name, lang: langOf(feed.lang, `${title} ${text}`), kind: 'rss', img: rssImage(b) });
     if (e) out.push(e);
   }
   return out;
@@ -67,6 +67,18 @@ function guessLang(text) {
   if (ku > tr) return 'ku';
   if (tr) return 'tr';
   return /[şŞçÇ]/.test(text) ? 'tr' : 'en';
+}
+
+// Kaynağın dili sources.json'da yazılıdır ama bazı kaynaklar arada başka dilde de yayın yapar (ör. Türkçe bir
+// sitede Arapça haber). Yazı (Arap/Latin harfi) belirtilen dile uymuyorsa dil yazıdan tahmin edilir; böylece
+// haber doğru dilden çevrilir.
+const ARABIC_SCRIPT = new Set(['ar', 'ckb', 'fa']);
+function langOf(declared, text) {
+  if (!declared || declared === 'auto') return guessLang(text);
+  const arabic = (text.match(/[؀-ۿ]/g) || []).length;
+  const latin = (text.match(/[A-Za-zÀ-ɏ]/g) || []).length;
+  const isArabic = arabic > latin;
+  return isArabic !== ARABIC_SCRIPT.has(declared) ? guessLang(text) : declared;
 }
 
 async function readTelegram(ch, since) {
@@ -87,7 +99,7 @@ async function readTelegram(ch, since) {
     const [first, ...rest] = lines;
     const title = first.length > 220 ? first.slice(0, 217) + '…' : first;
     const img = chunk.match(/tgme_widget_message_photo_wrap[^>]+background-image:url\('([^']+)'\)/)?.[1];
-    const e = toEvent({ id: 'tg:' + post, t, title, text: [first.length > 220 ? first : '', ...rest].join(' ').trim(), url: `https://t.me/${post}`, src: ch.name, lang: ch.lang === 'auto' ? guessLang(full) : ch.lang, kind: 'telegram', img });
+    const e = toEvent({ id: 'tg:' + post, t, title, text: [first.length > 220 ? first : '', ...rest].join(' ').trim(), url: `https://t.me/${post}`, src: ch.name, lang: langOf(ch.lang, full), kind: 'telegram', img });
     if (e) out.push(e);
   }
   return out;

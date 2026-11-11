@@ -10,7 +10,7 @@
     { "name": "Sözcü", "lang": "tr", "url": "https://www.sozcu.com.tr/feeds-son-dakika", "type": "mainstream" },
     { "name": "Yeni Yaşam", "lang": "tr", "url": "https://www.yeniyasamgazetesi9.com/rss", "type": "kurdish" },
     { "name": "ANF Türkçe", "lang": "tr", "url": "https://anfturkce.com/feed.rss", "type": "kurdish" },
-    { "name": "JinHa", "lang": "tr", "url": "https://jinhaagency.com/feed.rss", "type": "kurdish" },
+    { "name": "JinHa", "lang": "ar", "url": "https://jinhaagency.com/feed.rss", "type": "kurdish" },
     { "name": "DW Türkçe", "lang": "tr", "url": "https://rss.dw.com/rdf/rss-tur-all", "type": "international" },
     { "name": "Independent Türkçe", "lang": "tr", "url": "https://www.independentturkish.com/rss.xml", "type": "international" },
     { "name": "Kurdistan24 Türkçe", "lang": "tr", "url": "https://www.kurdistan24.net/tr/rss.xml", "type": "kurdish" },

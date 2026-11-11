@@ -36,7 +36,7 @@ export async function updateWeekly(events, dataDir) {
       r.total++;
       if (conflict) r.conflict++;
     }
-    d.top.push({ id: e.id, title: e.title, src: e.src, url: e.url, t: e.t, w: weight(e) });
+    d.top.push({ id: e.id, title: e.title, lang: e.lang, tt: e.tt, src: e.src, url: e.url, t: e.t, w: weight(e) });
   }
   const days = { ...old.days };
   for (const [key, d] of Object.entries(now)) {

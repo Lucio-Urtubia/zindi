@@ -1515,7 +1515,8 @@ async function playTv() {
   stopTv();
   const box = $('tvBox'), url = tvChannel;
   const fail = () => { if (tvChannel === url && $('tvBox')) { stopTv(); $('tvBox').innerHTML = `<div class="tv-frame tv-fail">${esc(T.x.tvFail)}</div>`; } };
-  box.innerHTML = '<div class="tv-frame"><video controls muted autoplay playsinline></video></div>';
+  // Ses açık başlar (kanala tıklamak tarayıcıya izin verir). Tarayıcı yine de engellerse sessiz oynar, ses düğmesi kalır.
+  box.innerHTML = '<div class="tv-frame"><video controls autoplay playsinline></video></div>';
   const video = box.querySelector('video');
   video.addEventListener('error', fail);
   try { await loadHls(); } catch { fail(); return; }
@@ -1526,7 +1527,8 @@ async function playTv() {
     tvPlayer.loadSource(url);
     tvPlayer.attachMedia(video);
   } else video.src = url;
-  video.play().catch(() => {});
+  video.muted = false;
+  video.play().catch(() => { video.muted = true; video.play().catch(() => {}); });
 }
 function tvHtml() {
   tvChannel ||= TV_CHANNELS[TV_DEFAULT[state.lang]][0][1];
@@ -1556,7 +1558,7 @@ function weekHtml() {
     <table class="fin-table"><thead><tr>${T.x.weekCol.map((c, i) => (i ? `<td class="week-head">${esc(c)}</td>` : `<th class="week-head">${esc(c)}</th>`)).join('')}</tr></thead>
       <tbody>${WEEK_REGIONS.map((k) => `<tr><th scope="row">${esc(T.regions[k])}</th><td>${num(sum(k, 'total'))}</td><td>${num(sum(k, 'conflict'))}</td></tr>`).join('')}</tbody></table>
     <h4 class="fin-group">${esc(T.x.weekTop)}</h4>
-    <ol class="imrali-list">${top.map((e) => `<li><a href="${esc(e.url || '#')}" target="_blank" rel="noopener" dir="auto">${esc(e.title)}</a><small>${esc(e.src || '')}</small></li>`).join('')}</ol>
+    <ol class="imrali-list">${top.map((e) => `<li><a href="${esc(e.url || '#')}" target="_blank" rel="noopener" dir="auto">${esc(titleOf(e))}</a><small>${esc(e.src || '')}</small></li>`).join('')}</ol>
     <p class="fin-note">${esc(T.x.weekNote(keys.length))}</p>
     <div class="share"><span>${esc(T.share)}</span><button type="button" data-copy="${esc(link)}" title="${esc(T.copyLink)}"><i class="ti ti-link"></i></button></div>`;
 }
@@ -1669,13 +1671,14 @@ $('infoBody').addEventListener('click', async (ev) => {
   openInfo('notify');
 });
 
-// Hakkında: sitenin ne olduğu, haberlerin nasıl okunacağı, kaynaklar ve gizlilik. İletişim adresi CONFIG.CONTACT'tan gelir.
+// Hakkında: GerdûnNews'in ne olduğu. İletişim adresi CONFIG.CONTACT'tan gelir.
 function aboutHtml() {
   const contact = (window.CONFIG?.CONTACT || '').trim();
-  return T.about.s.map(([h, p]) => `<h4 class="fin-group">${esc(h)}</h4><p class="about-text">${esc(p)}</p>`).join('')
+  return T.about.s.map(([h, p]) => `<h4 class="fin-group">${esc(h)}</h4>${[].concat(p).map((x) => `<p class="about-text">${esc(x)}</p>`).join('')}`).join('')
     + (contact ? `<p class="about-text"><i class="ti ti-mail"></i> <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>` : '')
-    // Telefonda haritadaki kaynak yazısı (i) gizli; aynı yazı burada gösterilir.
-    + (isMobile() ? `<h4 class="fin-group">${esc(T.m.sources)}</h4><p class="about-text map-sources">${document.querySelector('.maplibregl-ctrl-attrib-inner')?.innerHTML || ''}</p>` : '');
+    // Telefonda haritadaki harita lisans yazısı (i) gizli; harita verisinin lisansı bu yazının görünmesini istediği için
+    // burada başlıksız, küçük bir satır olarak durur.
+    + (isMobile() ? `<p class="about-text map-sources">${document.querySelector('.maplibregl-ctrl-attrib-inner')?.innerHTML || ''}</p>` : '');
 }
 
 const PAGES = {
