@@ -1,0 +1,10 @@
+# Test sitesi (Cloudflare Pages, arama motorlarına kapalı). Yüklemek için: bash pages/deploy.sh
+name = "zindi-test-6c7457"
+pages_build_output_dir = "public"
+compatibility_date = "2026-10-01"
+
+# İstek kayıtları (IP kaydı); yardımcı sunucuyla aynı veritabanı.
+[[d1_databases]]
+binding = "LOG"
+database_name = "gerdun-log"
+database_id = "877eb306-862f-468a-a071-33e8b483d95a"

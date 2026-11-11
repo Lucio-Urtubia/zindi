@@ -8,8 +8,19 @@ workers_dev = true
 [vars]
 # Siteye izin verilen adresler (virgülle ayrılır). Alan adı alınınca başa yazılır.
 ALLOWED_ORIGINS = "https://lucio-urtubia.github.io, http://localhost:8080, https://zindi-test-6c7457.pages.dev"
+LOG_DAYS = "30"
 
 # Bildirim abonelikleri. Kimliği "npx wrangler kv namespace create SUBS" komutunun çıktısından alın.
 [[kv_namespaces]]
 binding = "SUBS"
 id = "ae09baf356ee44bb8913223cc411ab92"
+
+# İstek kayıtları (IP kaydı): kim, ne zaman, hangi adrese geldi. Tablo: schema/log.sql. Görüntülemek için: node scripts/ip-log.mjs
+[[d1_databases]]
+binding = "LOG"
+database_name = "gerdun-log"
+database_id = "877eb306-862f-468a-a071-33e8b483d95a"
+
+# Kayıtlar kaç gün saklanır; daha eskileri her gün 03:00'te (UTC) silinir.
+[triggers]
+crons = ["0 3 * * *"]

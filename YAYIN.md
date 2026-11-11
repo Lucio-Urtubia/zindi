@@ -64,3 +64,14 @@ Depo → Settings:
 - Canlı TV yayınlarının çoğu yayıncıların izni olmadan kullanılıyor; şikâyet gelirse ilgili kanal listeden çıkarılır
   (`app.js` → `TV_CHANNELS`).
 - Veri her 15 dakikada bir `data` dalına tek kayıt olarak yazılır; ana dalın geçmişi büyümez.
+
+## IP kaydı (istek kayıtları)
+- Yardımcı sunucu (worker) ve Cloudflare Pages'teki site, gelen istekleri Cloudflare D1 veritabanına (`gerdun-log`)
+  yazar: zaman, IP, ülke/şehir, internet sağlayıcısı, adres, tarayıcı. Tablo: `worker/schema/log.sql`.
+- Site tarafı `pages/functions/_middleware.js`: sayfa açılışları, sitede olmayan adres istekleri (taramalar) ve GET dışı
+  istekler. Resim/kod dosyaları ve dakikada bir yapılan veri istekleri kaydedilmez.
+- Kayıtlar `LOG_DAYS` gün (şimdilik 30) saklanır, daha eskisini sunucu her gün siler (`worker/wrangler.toml`).
+- Bakmak için: `node scripts/ip-log.mjs` (son kayıtlar), `ozet`, `supheli`, `ip <adres>`, `saat <sayı>`.
+- GitHub Pages IP kaydı tutmaz; site GitHub Pages'te yayınlanırsa sadece sunucu tarafı kaydedilir. Site kaydı için
+  site Cloudflare Pages'te yayınlanmalı (`bash pages/deploy.sh`, test sitesi böyle çalışıyor).
+- Ücretsiz D1 sınırı günde 100.000 kayıttır; aşılırsa kayıt yazılmaz ama site çalışmaya devam eder.

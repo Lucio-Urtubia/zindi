@@ -172,17 +172,52 @@ async function push(req, env, url, cors) {
   return json({ error: 'bilinmeyen adres' }, cors, 404);
 }
 
+// 4) İstek kayıtları (IP kaydı), D1 veritabanı "gerdun-log" (tablo: schema/log.sql, bakmak için: node scripts/ip-log.mjs).
+//    Uçak verisinin başarılı istekleri sayfa açıkken birkaç saniyede bir tekrarlandığı için kaydedilmez;
+//    geri kalan her istek (bildirim, çeviri, hatalı ya da reddedilen istekler, bilinmeyen adresler) kaydedilir.
+//    LOG_DAYS günden eski kayıtlar her gün zamanlanmış görevle silinir.
+async function logRequest(env, req, status, src) {
+  if (!env.LOG) return;
+  const url = new URL(req.url), cf = req.cf || {}, h = req.headers;
+  const cut = (v, n) => (v ? String(v).slice(0, n) : null);
+  try {
+    await env.LOG.prepare('INSERT INTO log (t, ip, country, city, asn, org, method, host, path, status, ua, ref, src) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(Date.now(), h.get('CF-Connecting-IP'), cf.country || null, cf.city || null, cf.asn || null, cut(cf.asOrganization, 120),
+        req.method, url.host, cut(url.pathname + url.search, 300), status, cut(h.get('User-Agent'), 300), cut(h.get('Referer'), 300), src)
+      .run();
+  } catch { /* kayıt yazılamazsa istek yine de cevaplanır */ }
+}
+
+async function route(req, env, ctx, cors) {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+  const url = new URL(req.url);
+  if (url.pathname === '/mil' || url.pathname === '/area') return aircraft(url, cors);
+  if (url.pathname === '/tr') return translate(req, env, ctx, cors);
+  if (url.pathname.startsWith('/push/')) {
+    if (!env.SUBS) return json({ error: 'bildirim deposu kurulmamış' }, cors, 503);
+    return push(req, env, url, cors);
+  }
+  return new Response('GerdûnNews servisi: /area?lat=&lon=&dist=, /mil, /push/…, /tr', { headers: cors });
+}
+
 export default {
   async fetch(req, env, ctx) {
     const cors = corsHeaders(req, env);
-    if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
-    const url = new URL(req.url);
-    if (url.pathname === '/mil' || url.pathname === '/area') return aircraft(url, cors);
-    if (url.pathname === '/tr') return translate(req, env, ctx, cors);
-    if (url.pathname.startsWith('/push/')) {
-      if (!env.SUBS) return json({ error: 'bildirim deposu kurulmamış' }, cors, 503);
-      return push(req, env, url, cors);
+    let res;
+    try {
+      res = await route(req, env, ctx, cors);
+    } catch (e) {
+      res = json({ error: 'sunucu hatası' }, cors, 500);
     }
-    return new Response('GerdûnNews servisi: /area?lat=&lon=&dist=, /mil, /push/…, /tr', { headers: cors });
+    const path = new URL(req.url).pathname;
+    const routine = (path === '/mil' || path === '/area' || req.method === 'OPTIONS') && res.status < 400;
+    if (!routine) ctx.waitUntil(logRequest(env, req, res.status, 'api'));
+    return res;
+  },
+  // Her gün: LOG_DAYS günden eski istek kayıtlarını sil.
+  async scheduled(event, env) {
+    if (!env.LOG) return;
+    const days = Number(env.LOG_DAYS || 30);
+    await env.LOG.prepare('DELETE FROM log WHERE t < ?').bind(Date.now() - days * 864e5).run();
   },
 };
