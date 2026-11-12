@@ -206,11 +206,28 @@ function limiter(max, windowMs) {
 const floodLimit = limiter(120, 10000); // IP başına 10 saniyede 120 istek: aşınca 429
 const logLimit = limiter(15, 60000);    // IP başına dakikada en çok 15 log satırı: D1 kotası şişmesin
 
+// İçerik bildirimi: uygulamadaki "Bildir" düğmesi buraya gönderir, kayıt "report" tablosuna düşer.
+// Sel sınırı zaten üstte uygulanıyor; burada sadece boyut sınırlanır.
+async function report(req, env, cors) {
+  if (req.method !== 'POST') return json({ error: 'POST bekleniyor' }, cors, 405);
+  if (!env.LOG) return json({ error: 'kayıt deposu kurulmamış' }, cors, 503);
+  let b;
+  try { b = await req.json(); } catch { return json({ error: 'geçersiz istek' }, cors, 400); }
+  const cut = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null);
+  try {
+    await env.LOG.prepare('INSERT INTO report (t, ip, eid, url, title, src) VALUES (?,?,?,?,?,?)')
+      .bind(Date.now(), req.headers.get('CF-Connecting-IP'), cut(b.id, 80), cut(b.url, 300), cut(b.title, 300), cut(b.src, 120))
+      .run();
+  } catch { return json({ error: 'kaydedilemedi' }, cors, 500); }
+  return json({ ok: true }, cors);
+}
+
 async function route(req, env, ctx, cors) {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const url = new URL(req.url);
   if (url.pathname === '/mil' || url.pathname === '/area') return aircraft(url, cors);
   if (url.pathname === '/tr') return translate(req, env, ctx, cors);
+  if (url.pathname === '/report') return report(req, env, cors);
   if (url.pathname.startsWith('/push/')) {
     if (!env.SUBS) return json({ error: 'bildirim deposu kurulmamış' }, cors, 503);
     return push(req, env, url, cors);

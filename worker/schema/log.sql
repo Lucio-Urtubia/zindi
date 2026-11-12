@@ -11,3 +11,14 @@ CREATE TABLE IF NOT EXISTS log (
 );
 CREATE INDEX IF NOT EXISTS log_t ON log(t);
 CREATE INDEX IF NOT EXISTS log_ip ON log(ip, t);
+
+-- İçerik bildirimleri (uygulamadaki "Bildir" düğmesi). Mağaza kuralı: uygunsuz içerik bildirilebilmeli.
+CREATE TABLE IF NOT EXISTS report (
+  t INTEGER NOT NULL,
+  ip TEXT,
+  eid TEXT,     -- haberin kimliği
+  url TEXT,
+  title TEXT,
+  src TEXT
+);
+CREATE INDEX IF NOT EXISTS report_t ON report(t);

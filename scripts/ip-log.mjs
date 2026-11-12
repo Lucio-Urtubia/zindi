@@ -6,6 +6,7 @@
 //   node scripts/ip-log.mjs supheli       son 24 saatte sitede olmayan adresleri tarayan ya da çok sık istek yapan IP'ler
 //   node scripts/ip-log.mjs ip 1.2.3.4    bir IP'nin bütün kayıtları
 //   node scripts/ip-log.mjs saat 6        son 6 saatin kayıtları (en çok 500)
+//   node scripts/ip-log.mjs rapor         kullanıcıların bildirdiği içerikler (son 100)
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +42,8 @@ if (mode === 'son') {
   show('Son 24 saat: sitede olmayan, en çok istenen adresler (taramalar)', query(`SELECT path, src, COUNT(*) AS istek, COUNT(DISTINCT ip) AS ip_sayisi FROM log WHERE t > ${DAY} AND ${SCAN} GROUP BY path, src ORDER BY istek DESC LIMIT 20`));
 } else if (mode === 'supheli') {
   show("Son 24 saat: sitede olmayan adresleri tarayan ya da çok sık istek yapan IP'ler", query(`SELECT ip, country, org, SUM(${SCAN}) AS tarama, COUNT(*) AS istek, MAX(CASE WHEN ${SCAN} THEN path END) AS ornek_adres FROM log WHERE t > ${DAY} GROUP BY ip HAVING tarama >= 3 OR istek > 300 ORDER BY tarama DESC, istek DESC LIMIT 50`));
+} else if (mode === 'rapor') {
+  show('Bildirilen içerikler (son 100)', query('SELECT t, ip, eid, src, title, url FROM report ORDER BY t DESC LIMIT 100'));
 } else if (mode === 'ip' && /^[0-9a-fA-F:.]{3,45}$/.test(arg || '')) {
   show(`${arg} kayıtları`, query(`SELECT ${COLS}, ref FROM log WHERE ip = '${arg}' ORDER BY t DESC LIMIT 500`));
 } else if (mode === 'saat' && /^\d{1,3}$/.test(arg || '')) {

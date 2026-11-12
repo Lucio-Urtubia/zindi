@@ -557,3 +557,16 @@ select { font: inherit; border: 1px solid var(--line); border-radius: 6px; paddi
   background: var(--panel-2); color: #1c7ed6; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; vertical-align: middle; }
 .tr-btn:hover { border-color: #1c7ed6; }
 .tr-btn:disabled { opacity: .6; cursor: default; }
+
+/* İçeriği bildir / gizlilik bağlantısı (mağaza sürümü) */
+.report-btn, .link-btn { background: none; border: 0; color: var(--muted, #8a94a6); font: inherit; cursor: pointer; padding: 6px 0; display: inline-flex; align-items: center; gap: 6px; }
+.report-btn { margin-top: 8px; font-size: 13px; }
+.report-btn:hover, .link-btn:hover { color: var(--fg, #e6ebf2); }
+.report-btn[disabled] { color: var(--ok, #4caf50); cursor: default; }
+
+/* İlk açılış içerik uyarısı (17+) */
+.gate { position: fixed; inset: 0; z-index: 3000; background: rgba(8, 12, 20, .72); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.gate-box { max-width: 420px; background: var(--panel, #1a2130); color: var(--fg, #e6ebf2); border: 1px solid var(--line, #2a3342); border-radius: 16px; padding: 22px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+.gate-box h2 { margin: 0 0 10px; font-size: 18px; }
+.gate-box p { margin: 0 0 18px; line-height: 1.5; color: var(--muted, #b4bccb); }
+.gate-ok { width: 100%; padding: 12px; border: 0; border-radius: 10px; background: var(--accent, #c1121f); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }

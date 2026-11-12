@@ -77,6 +77,14 @@ const activeRegion = () => (state.region && state.region !== 'all' && REGION_SHA
 const $ = (id) => document.getElementById(id);
 // Paylaşılabilir bağlantılar: ?lang=ckb&region=kurdistan&topic=kurdistan gibi.
 const PARAMS = new URLSearchParams(location.search);
+// Uygulama (Google Play / App Store) sürümü: uygulama siteyi "?app=1" ile açar, bu da tarayıcıda saklanır.
+// Mağaza kuralları gereği izinsiz canlı TV uygulama sürümünde gizlenir (web sürümünde durmaya devam eder).
+const APP_BUILD = (() => {
+  try {
+    if (PARAMS.get('app') === '1') localStorage.setItem('appBuild', '1');
+    return localStorage.getItem('appBuild') === '1';
+  } catch { return PARAMS.get('app') === '1'; }
+})();
 const state = {
   events: [], imrali: [], updated: 0, fresh: 0, off: new Set(), q: '', hours: 6, inView: true, activeId: null,
   lang: pickLang(), region: null, panel: null, topic: 'all',
@@ -1288,7 +1296,28 @@ function infoHtml(e) {
     ${e.url ? `<a class="info-open" href="${esc(e.url)}" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> ${T.source}</a>` : ''}
     ${e.kind === 'usgs' && e.url ? `<a class="info-open felt-btn" href="${esc(e.url)}/tellus" target="_blank" rel="noopener"><i class="ti ti-hand-stop"></i> ${esc(T.x.felt)}</a>${e.felt ? `<p class="fin-note">${esc(T.x.feltN(e.felt))}</p>` : ''}` : ''}
     ${sourcesHtml(e)}
-    ${shareHtml(e)}`;
+    ${shareHtml(e)}
+    ${reportHtml(e)}`;
+}
+
+// İçeriği bildir: haberler dış kaynaklardan otomatik toplanır; uygunsuz içerik tek dokunuşla bildirilir
+// (mağaza kuralları: kullanıcı üretimi/üçüncü taraf içerik bildirilebilmeli). Bildirim sunucudaki kayda düşer.
+function reportHtml(e) {
+  if (!e || !e.id || e.cat === 'launch' || e.kind === 'usgs') return '';
+  return `<button type="button" class="report-btn" data-report="${esc(e.id)}"><i class="ti ti-flag"></i> ${esc(T.report.btn)}</button>`;
+}
+async function sendReport(e) {
+  const api = (window.CONFIG?.API || '').replace(/\/$/, '');
+  const payload = { id: e.id, url: e.url || '', title: e.title || '', src: e.src || '' };
+  if (api) {
+    try {
+      const r = await fetch(`${api}/report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (r.ok) return true;
+    } catch { /* aşağıda e-postaya düşer */ }
+  }
+  const to = (window.CONFIG?.CONTACT || '').trim();
+  if (to) { open(`mailto:${to}?subject=${encodeURIComponent('İçerik bildirimi: ' + payload.id)}&body=${encodeURIComponent(payload.title + '\n' + payload.url)}`, '_blank'); return true; }
+  return false;
 }
 
 // Kaynağın türü: resmî, Kürt medyası, bağımsız, ana akım, uluslararası.
@@ -1316,10 +1345,19 @@ function shareHtml(e) {
 $('infoBody').addEventListener('click', async (ev) => {
   const copy = ev.target.closest('[data-copy]');
   const native = ev.target.closest('[data-native]');
+  const report = ev.target.closest('[data-report]');
+  const page = ev.target.closest('[data-page]');
+  if (page) { togglePage(page.dataset.page); return; }
   if (copy) {
     try { await navigator.clipboard.writeText(copy.dataset.copy); copy.classList.add('done'); copy.title = T.copied; } catch {}
   } else if (native) {
     try { await navigator.share({ title: document.title, text: $('infoBody').querySelector('.info-title')?.textContent || '', url: native.dataset.native }); } catch {}
+  } else if (report) {
+    const e = byId.get(report.dataset.report);
+    if (e && confirm(T.report.confirm)) {
+      report.disabled = true;
+      report.innerHTML = `<i class="ti ti-check"></i> ${esc((await sendReport(e)) ? T.report.done : T.report.fail)}`;
+    }
   }
 });
 function issHtml() {
@@ -1481,6 +1519,7 @@ function fitFinanceBar() {
 }
 addEventListener('resize', fitFinanceBar);
 function togglePage(name) {
+  if (APP_BUILD && name === 'tv') return; // uygulama sürümünde TV yok
   if (infoOpenFor === name) closeInfo();
   else openInfo(name);
 }
@@ -1678,14 +1717,21 @@ $('infoBody').addEventListener('click', async (ev) => {
 function aboutHtml() {
   const contact = (window.CONFIG?.CONTACT || '').trim();
   return T.about.s.map(([h, p]) => `<h4 class="fin-group">${esc(h)}</h4>${[].concat(p).map((x) => `<p class="about-text">${esc(x)}</p>`).join('')}`).join('')
+    + `<p class="about-text"><button type="button" class="link-btn" data-page="privacy"><i class="ti ti-shield-lock"></i> ${esc(T.privacy.title)}</button></p>`
     + (contact ? `<p class="about-text"><i class="ti ti-mail"></i> <a href="mailto:${esc(contact)}">${esc(contact)}</a></p>` : '')
     // Telefonda haritadaki harita lisans yazısı (i) gizli; harita verisinin lisansı bu yazının görünmesini istediği için
     // burada başlıksız, küçük bir satır olarak durur.
     + (isMobile() ? `<p class="about-text map-sources">${document.querySelector('.maplibregl-ctrl-attrib-inner')?.innerHTML || ''}</p>` : '');
 }
 
+// Gizlilik politikası (mağazalar zorunlu tutar). Metin i18n.js'te; uygulama içinde ve ayrı adreste (gizlilik.html) durur.
+function privacyHtml() {
+  return T.privacy.s.map(([h, p]) => `<h4 class="fin-group">${esc(h)}</h4>${[].concat(p).map((x) => `<p class="about-text">${esc(x)}</p>`).join('')}`).join('');
+}
+
 const PAGES = {
   about: { title: () => T.about.title, html: aboutHtml },
+  privacy: { title: () => T.privacy.title, html: privacyHtml },
   finance: { title: () => T.fin.title, html: financeHtml },
   tv: { title: () => T.x.tv, html: tvHtml, opened: playTv },
   week: { title: () => T.x.week, html: weekHtml, opened: weekOpened },
@@ -2179,7 +2225,7 @@ function render() {
 function renderRegions() {
   $('regions').innerHTML = REGION_TABS.map((k) =>
     `<button class="region ${state.region === k ? 'active' : ''}" data-region="${k}">${T.regions[k]}</button>`).join('')
-    + [['tv', 'device-tv', T.x.tv], ['week', 'calendar-week', T.x.week], ['weather', 'cloud', T.m.weather]].map(([p, icon, label]) =>
+    + [['tv', 'device-tv', T.x.tv], ['week', 'calendar-week', T.x.week], ['weather', 'cloud', T.m.weather]].filter(([p]) => !(APP_BUILD && p === 'tv')).map(([p, icon, label]) =>
       `<button class="region fin-btn" type="button" data-page="${p}"><i class="ti ti-${icon}"></i>${esc(label)}</button>`).join('');
   renderFinanceBar();
 }
@@ -2445,7 +2491,10 @@ function closeMenus() { $('regionMenu').hidden = true; $('moreMenu').hidden = tr
 function renderMobile() {
   $('regionPick').querySelector('span').textContent = T.regions[state.region || 'all'];
   const labels = { map: T.m.map, feed: T.tabs.feed, tv: T.x.tv, weather: T.m.wxShort || T.m.weather, more: T.m.more };
-  for (const b of $('bottomNav').querySelectorAll('[data-nav]')) b.querySelector('span').textContent = labels[b.dataset.nav];
+  for (const b of $('bottomNav').querySelectorAll('[data-nav]')) {
+    if (APP_BUILD && b.dataset.nav === 'tv') { b.hidden = true; continue; } // uygulama sürümünde TV düğmesi gizli
+    b.querySelector('span').textContent = labels[b.dataset.nav];
+  }
   $('mLayersBtn').title = T.tabs.layers;
   $('mSpaceBtn').title = T.m.space;
   $('regionMenu').innerHTML = REGION_TABS.map((k) =>
@@ -2567,8 +2616,21 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').then(() => syncPush()).catch(() => {});
 }
 // Simgeler icons.js'ten hazır geldiği için yazı tipi beklenmeden başlanır.
+// Uygulama sürümünde ilk açılışta içerik uyarısı (çatışma/savaş haberleri; 17+). Bir kez onaylanır.
+function contentGate() {
+  if (!APP_BUILD) return;
+  try { if (localStorage.getItem('gateOk') === '1') return; } catch { return; }
+  const g = T.gate;
+  const el = document.createElement('div');
+  el.className = 'gate';
+  el.innerHTML = `<div class="gate-box"><h2>${esc(g.title)}</h2><p>${esc(g.body)}</p>
+    <button type="button" class="gate-ok">${esc(g.ok)}</button></div>`;
+  el.querySelector('.gate-ok').addEventListener('click', () => { try { localStorage.setItem('gateOk', '1'); } catch {} el.remove(); });
+  document.body.appendChild(el);
+}
 {
   applyLanguage();
+  contentGate();
   load();
   updateIss();
   refreshSats();

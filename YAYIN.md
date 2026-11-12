@@ -75,3 +75,14 @@ Depo → Settings:
 - GitHub Pages IP kaydı tutmaz; site GitHub Pages'te yayınlanırsa sadece sunucu tarafı kaydedilir. Site kaydı için
   site Cloudflare Pages'te yayınlanmalı (`bash pages/deploy.sh`, test sitesi böyle çalışıyor).
 - Ücretsiz D1 sınırı günde 100.000 kayıttır; aşılırsa kayıt yazılmaz ama site çalışmaya devam eder.
+
+## Mağaza sürümü (Google Play / App Store)
+- **Uygulama modu:** Uygulama siteyi `?app=1` ile açar (manifest start_url'ine eklenir). Bu modda, mağaza telif
+  kuralları gereği izinsiz **canlı TV gizlenir** ve ilk açılışta **17+ içerik uyarısı** çıkar. Web sürümünde ikisi de yok.
+- **İçeriği bildir:** Her haberde "Bildir" düğmesi; bildirim sunucudaki `report` tablosuna düşer
+  (`node scripts/ip-log.mjs rapor` ile görülür). Mağaza "üçüncü taraf içerik bildirilebilmeli" kuralı için.
+- **Gizlilik politikası:** Uygulama içinde (Hakkında → Gizlilik) ve ayrı adreste `/gizlilik.html`. Mağaza formunda bu adres verilir.
+- **Google Play yolu (daha kolay):** Kendi alan adı + Google Play hesabı (25 $) + PWABuilder/Bubblewrap ile TWA paketi +
+  `/.well-known/assetlinks.json`. Yaş derecesi 17+, veri güvenliği formunda IP kaydı belirtilir.
+- **App Store yolu:** Mac + Xcode + Apple hesabı (99 $/yıl) + native sarmalayıcı (Capacitor). Saf web reddedilebilir (4.2).
+- **Kalan karar:** mağaza hesabı gerçek kimliği bağlar (anonimlik planıyla çelişir); alan adı seçimi; (gerekirse) TV'yi lisanslamak.
